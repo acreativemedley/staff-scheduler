@@ -658,7 +658,11 @@ export default function ScheduleGenerator() {
   }
 
   return (
-    <div style={{ padding: '20px' }}>
+    <div style={{ 
+      padding: '16px 12px',
+      maxWidth: '100%',
+      boxSizing: 'border-box'
+    }}>
       <h2>Weekly Schedule Generator</h2>
       <p style={{ marginBottom: '20px', color: '#6b7280' }}>
         Load your predefined base schedule and edit as needed. Time-off conflicts are highlighted in red.
@@ -768,12 +772,17 @@ export default function ScheduleGenerator() {
 
       {/* Weekly Schedule Grid */}
       <div style={{ 
-        overflowX: 'auto',
         border: '1px solid #d1d5db',
         borderRadius: '8px',
-        backgroundColor: 'white'
+        backgroundColor: 'white',
+        width: '100%'
       }}>
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(7, minmax(200px, 1fr))`, minWidth: '1400px' }}>
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(7, 1fr)',
+          width: '100%',
+          minHeight: '400px'
+        }}>
           {weekDates.map((date, index) => {
             const dateKey = formatDateForInput(date);
             const daySchedule = weeklySchedule[dateKey];
@@ -790,21 +799,21 @@ export default function ScheduleGenerator() {
               >
                 {/* Day Header */}
                 <div style={{
-                  padding: '15px 10px',
+                  padding: '12px 8px',
                   backgroundColor: '#f3f4f6',
                   borderBottom: '1px solid #e5e7eb',
                   textAlign: 'center'
                 }}>
-                  <div style={{ fontWeight: 'bold', fontSize: '16px' }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '15px' }}>
                     {formatDateHeader(date)}
                   </div>
-                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '5px' }}>
+                  <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
                     10:00 AM - 6:00 PM
                   </div>
                 </div>
 
                 {/* Day Schedule */}
-                <div style={{ padding: '10px' }}>
+                <div style={{ padding: '8px' }}>
                   {daySchedule ? (
                     <div>
                       {daySchedule.shifts.map((shift) => (
