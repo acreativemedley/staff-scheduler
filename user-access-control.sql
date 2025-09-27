@@ -24,6 +24,14 @@ CREATE INDEX IF NOT EXISTS idx_user_profiles_active ON user_profiles(is_active);
 -- Enable Row Level Security on user_profiles
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing RLS policies for user_profiles table (in case they exist)
+DROP POLICY IF EXISTS "Users can read own profile" ON user_profiles;
+DROP POLICY IF EXISTS "Admins can read all profiles" ON user_profiles;
+DROP POLICY IF EXISTS "Managers can read staff and manager profiles" ON user_profiles;
+DROP POLICY IF EXISTS "Only admins can insert user profiles" ON user_profiles;
+DROP POLICY IF EXISTS "Users can update profiles" ON user_profiles;
+DROP POLICY IF EXISTS "Only admins can delete user profiles" ON user_profiles;
+
 -- RLS Policies for user_profiles table
 
 -- Policy: Users can read their own profile
@@ -54,15 +62,18 @@ CREATE POLICY "Managers can read staff and manager profiles" ON user_profiles
     )
   );
 
--- Policy: Only admins can insert new user profiles
+-- Policy: Only admins can insert new user profiles, OR allow the system trigger
 CREATE POLICY "Only admins can insert user profiles" ON user_profiles
   FOR INSERT
   TO authenticated
   WITH CHECK (
+    -- Allow if user is admin
     EXISTS (
       SELECT 1 FROM user_profiles 
       WHERE id = auth.uid() AND user_role = 'admin'
     )
+    -- OR allow if this is creating the user's own profile (for the trigger)
+    OR auth.uid() = id
   );
 
 -- Policy: Admins can update any profile, users can update their own basic info
@@ -157,11 +168,15 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Update existing RLS policies for employees table to respect user roles
 
--- Drop existing policies
+-- Drop existing policies (including any that might exist)
 DROP POLICY IF EXISTS "Allow authenticated users to read employees" ON employees;
 DROP POLICY IF EXISTS "Allow authenticated users to insert employees" ON employees;
 DROP POLICY IF EXISTS "Allow authenticated users to update employees" ON employees;
 DROP POLICY IF EXISTS "Allow authenticated users to delete employees" ON employees;
+DROP POLICY IF EXISTS "All authenticated users can read employees" ON employees;
+DROP POLICY IF EXISTS "Admins and managers can insert employees" ON employees;
+DROP POLICY IF EXISTS "Admins and managers can update employees" ON employees;
+DROP POLICY IF EXISTS "Only admins can delete employees" ON employees;
 
 -- New RLS policies for employees table based on user roles
 

@@ -38,11 +38,23 @@ function AppContent() {
   }
 
   if (loading || userLoading) {
-    return <div style={{ textAlign: 'center', padding: '2rem' }}>Loading...</div>
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <p>Loading...</p>
+        {userLoading && <p style={{ fontSize: '0.875rem', color: '#666' }}>Loading user profile...</p>}
+      </div>
+    )
   }
 
   if (!user) {
     return <AuthFixed />
+  }
+
+  // If user profile is not available, treat as staff with basic access
+  const effectiveUserProfile = userProfile || { 
+    user_role: 'staff', 
+    full_name: user.email?.split('@')[0] || 'User',
+    email: user.email 
   }
 
   // Define navigation tabs based on user permissions
@@ -82,15 +94,16 @@ function AppContent() {
             borderRadius: '4px',
             fontSize: '0.875rem',
             backgroundColor: 
-              userProfile?.user_role === 'admin' ? '#dbeafe' : 
-              userProfile?.user_role === 'manager' ? '#fef3c7' : '#f0fdf4',
+              effectiveUserProfile?.user_role === 'admin' ? '#dbeafe' : 
+              effectiveUserProfile?.user_role === 'manager' ? '#fef3c7' : '#f0fdf4',
             color: 
-              userProfile?.user_role === 'admin' ? '#1e40af' : 
-              userProfile?.user_role === 'manager' ? '#92400e' : '#166534'
+              effectiveUserProfile?.user_role === 'admin' ? '#1e40af' : 
+              effectiveUserProfile?.user_role === 'manager' ? '#92400e' : '#166534'
           }}>
-            {userProfile?.user_role?.charAt(0).toUpperCase() + userProfile?.user_role?.slice(1)}
+            {effectiveUserProfile?.user_role?.charAt(0).toUpperCase() + effectiveUserProfile?.user_role?.slice(1)}
+            {!userProfile && ' (Default)'}
           </span>
-          <span>Welcome, {userProfile?.full_name || user.email}</span>
+          <span>Welcome, {effectiveUserProfile?.full_name || user.email}</span>
           <button
             onClick={handleSignOut}
             style={{

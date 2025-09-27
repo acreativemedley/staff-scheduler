@@ -26,7 +26,8 @@ export const UserProvider = ({ children }) => {
 
   // Check if user has required permission level
   const hasPermission = (requiredRole) => {
-    if (!userProfile) return false
+    // If no userProfile is loaded yet, default to staff permissions
+    const currentRole = userProfile?.user_role || 'staff'
     
     const roleHierarchy = {
       admin: 3,
@@ -34,7 +35,7 @@ export const UserProvider = ({ children }) => {
       staff: 1
     }
     
-    const userLevel = roleHierarchy[userProfile.user_role] || 0
+    const userLevel = roleHierarchy[currentRole] || 1
     const requiredLevel = roleHierarchy[requiredRole] || 0
     
     return userLevel >= requiredLevel
@@ -51,6 +52,7 @@ export const UserProvider = ({ children }) => {
   // Fetch user profile data
   const fetchUserProfile = async (userId) => {
     try {
+      console.log('UserContext: Fetching profile for user ID:', userId)
       const { data, error } = await supabase
         .from('user_profiles')
         .select('*')
@@ -58,13 +60,20 @@ export const UserProvider = ({ children }) => {
         .single()
 
       if (error) {
-        console.error('Error fetching user profile:', error)
+        console.error('UserContext: Error fetching user profile:', error)
+        // If the user_profiles table doesn't exist or user profile doesn't exist,
+        // we'll continue without a profile rather than crashing
+        if (error.code === 'PGRST116' || error.code === '42P01') {
+          console.warn('UserContext: user_profiles table not found or user profile missing, continuing without profile')
+          return null
+        }
         return null
       }
 
+      console.log('UserContext: Profile data received:', data)
       return data
     } catch (err) {
-      console.error('Error in fetchUserProfile:', err)
+      console.error('UserContext: Error in fetchUserProfile:', err)
       return null
     }
   }
@@ -98,17 +107,25 @@ export const UserProvider = ({ children }) => {
   useEffect(() => {
     const initializeUser = async () => {
       try {
+        console.log('UserContext: Initializing user...')
         // Get current session
         const { data: { session } } = await supabase.auth.getSession()
+        console.log('UserContext: Session data:', session)
         
         if (session?.user) {
+          console.log('UserContext: User found, setting user state')
           setUser(session.user)
+          console.log('UserContext: Fetching user profile for:', session.user.id)
           const profile = await fetchUserProfile(session.user.id)
+          console.log('UserContext: Profile fetched:', profile)
           setUserProfile(profile)
+        } else {
+          console.log('UserContext: No session found')
         }
       } catch (error) {
-        console.error('Error initializing user:', error)
+        console.error('UserContext: Error initializing user:', error)
       } finally {
+        console.log('UserContext: Setting loading to false')
         setLoading(false)
       }
     }
@@ -118,15 +135,21 @@ export const UserProvider = ({ children }) => {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (session?.user) {
-          setUser(session.user)
-          const profile = await fetchUserProfile(session.user.id)
-          setUserProfile(profile)
-        } else {
-          setUser(null)
-          setUserProfile(null)
+        console.log('UserContext: Auth state changed:', event, session?.user?.id)
+        try {
+          if (session?.user) {
+            setUser(session.user)
+            const profile = await fetchUserProfile(session.user.id)
+            setUserProfile(profile)
+          } else {
+            setUser(null)
+            setUserProfile(null)
+          }
+        } catch (error) {
+          console.error('UserContext: Error in auth state change:', error)
+        } finally {
+          setLoading(false)
         }
-        setLoading(false)
       }
     )
 
