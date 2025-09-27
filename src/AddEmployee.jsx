@@ -125,7 +125,11 @@ function AddEmployee({ onEmployeeAdded }) {
               setFormData(prev => ({
                 ...prev,
                 position: newPosition,
-                role: ['Manager', 'Owner'].includes(newPosition) ? 'manager' : 'staff'
+                role: ['Manager', 'Owner'].includes(newPosition) 
+                  ? 'manager' 
+                  : newPosition === 'Tech' 
+                    ? 'tech' 
+                    : 'staff'
               }))
             }}
             required
@@ -133,6 +137,7 @@ function AddEmployee({ onEmployeeAdded }) {
           >
             <option value="Sales Floor">Sales Floor</option>
             <option value="Teacher">Teacher</option>
+            <option value="Tech">Tech</option>
             <option value="Manager">Manager</option>
             <option value="Owner">Owner</option>
           </select>
@@ -148,6 +153,7 @@ function AddEmployee({ onEmployeeAdded }) {
             style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', backgroundColor: '#f5f5f5' }}
           >
             <option value="staff">Staff</option>
+            <option value="tech">Tech</option>
             <option value="manager">Manager</option>
           </select>
           <small style={{ color: '#666' }}>Role is automatically set based on position</small>

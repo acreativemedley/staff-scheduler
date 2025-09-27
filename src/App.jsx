@@ -10,29 +10,23 @@ import TimeOffManager from './TimeOffManager'
 import ScheduleTemplates from './ScheduleTemplates'
 import BaseScheduleManager from './BaseScheduleManager'
 import ScheduleGenerator from './ScheduleGenerator'
+import UserManagement from './UserManagement'
+import { UserProvider, useUser } from './UserContext'
 import './App.css'
 
-function App() {
-  const [user, setUser] = useState(null)
+function AppContent() {
+  const { user, userProfile, loading: userLoading, canManageEmployees, canManageUserAccounts } = useUser()
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [refreshEmployees, setRefreshEmployees] = useState(0)
   const [activeTab, setActiveTab] = useState('employees')
 
   useEffect(() => {
-    // Check if user is already logged in
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
+    // Wait for user context to load
+    if (!userLoading) {
       setLoading(false)
-    })
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
+    }
+  }, [userLoading])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -43,12 +37,39 @@ function App() {
     setShowAddForm(false)
   }
 
-  if (loading) {
+  if (loading || userLoading) {
     return <div style={{ textAlign: 'center', padding: '2rem' }}>Loading...</div>
   }
 
   if (!user) {
-    return <AuthFixed onAuth={setUser} />
+    return <AuthFixed />
+  }
+
+  // Define navigation tabs based on user permissions
+  const getNavigationTabs = () => {
+    const baseTabs = [
+      { key: 'employees', label: 'Employees', icon: '👥' },
+      { key: 'availability-overview', label: 'Team Availability', icon: '📅' },
+      { key: 'availability-manager', label: 'Set Availability', icon: '⚙️' },
+      { key: 'time-off-request', label: 'Request Time Off', icon: '🏖️' },
+      { key: 'schedule-generator', label: 'Weekly Schedules', icon: '📊' }
+    ]
+
+    // Add management tabs for managers and admins
+    if (canManageEmployees()) {
+      baseTabs.splice(4, 0, 
+        { key: 'time-off-manager', label: 'Manage Time-Off', icon: '📋' },
+        { key: 'schedule-templates', label: 'Schedule Templates', icon: '🗓️' },
+        { key: 'base-schedule-manager', label: 'Base Schedule', icon: '📝' }
+      )
+    }
+
+    // Add admin-only tabs
+    if (canManageUserAccounts()) {
+      baseTabs.push({ key: 'user-management', label: 'User Management', icon: '👤' })
+    }
+
+    return baseTabs
   }
 
   return (
@@ -56,7 +77,20 @@ function App() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <h1>Staff Scheduling System</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <span>Welcome, {user.email}</span>
+          <span style={{ 
+            padding: '0.25rem 0.5rem',
+            borderRadius: '4px',
+            fontSize: '0.875rem',
+            backgroundColor: 
+              userProfile?.user_role === 'admin' ? '#dbeafe' : 
+              userProfile?.user_role === 'manager' ? '#fef3c7' : '#f0fdf4',
+            color: 
+              userProfile?.user_role === 'admin' ? '#1e40af' : 
+              userProfile?.user_role === 'manager' ? '#92400e' : '#166534'
+          }}>
+            {userProfile?.user_role?.charAt(0).toUpperCase() + userProfile?.user_role?.slice(1)}
+          </span>
+          <span>Welcome, {userProfile?.full_name || user.email}</span>
           <button
             onClick={handleSignOut}
             style={{
@@ -78,17 +112,8 @@ function App() {
         borderBottom: '2px solid #e5e7eb',
         marginBottom: '2rem'
       }}>
-        <div style={{ display: 'flex', gap: '0' }}>
-          {[
-            { key: 'employees', label: 'Employees', icon: '👥' },
-            { key: 'availability-overview', label: 'Team Availability', icon: '📅' },
-            { key: 'availability-manager', label: 'Set Availability', icon: '⚙️' },
-            { key: 'time-off-request', label: 'Request Time Off', icon: '🏖️' },
-            { key: 'time-off-manager', label: 'Time-Off Requests', icon: '📋' },
-            { key: 'schedule-templates', label: 'Schedule Templates', icon: '🗓️' },
-            { key: 'base-schedule-manager', label: 'Base Schedule', icon: '📝' },
-            { key: 'schedule-generator', label: 'Weekly Schedules', icon: '📊' }
-          ].map(tab => (
+        <div style={{ display: 'flex', gap: '0', flexWrap: 'wrap' }}>
+          {getNavigationTabs().map(tab => (
             <button
               key={tab.key}
               onClick={() => {
@@ -119,24 +144,26 @@ function App() {
       {/* Tab Content */}
       {activeTab === 'employees' && (
         <div>
-          <div style={{ marginBottom: '2rem' }}>
-            <button
-              onClick={() => setShowAddForm(!showAddForm)}
-              style={{
-                padding: '0.75rem 1.5rem',
-                backgroundColor: showAddForm ? '#6c757d' : '#28a745',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                fontSize: '1rem',
-                cursor: 'pointer'
-              }}
-            >
-              {showAddForm ? 'Cancel' : 'Add New Employee'}
-            </button>
-          </div>
+          {canManageEmployees() && (
+            <div style={{ marginBottom: '2rem' }}>
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: showAddForm ? '#6c757d' : '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '1rem',
+                  cursor: 'pointer'
+                }}
+              >
+                {showAddForm ? 'Cancel' : 'Add New Employee'}
+              </button>
+            </div>
+          )}
 
-          {showAddForm && <AddEmployee onEmployeeAdded={handleEmployeeAdded} />}
+          {showAddForm && canManageEmployees() && <AddEmployee onEmployeeAdded={handleEmployeeAdded} />}
 
           <EmployeeList key={refreshEmployees} />
         </div>
@@ -148,14 +175,25 @@ function App() {
 
       {activeTab === 'time-off-request' && <TimeOffRequest />}
 
-      {activeTab === 'time-off-manager' && <TimeOffManager />}
+      {activeTab === 'time-off-manager' && canManageEmployees() && <TimeOffManager />}
 
-      {activeTab === 'schedule-templates' && <ScheduleTemplates />}
+      {activeTab === 'schedule-templates' && canManageEmployees() && <ScheduleTemplates />}
 
-      {activeTab === 'base-schedule-manager' && <BaseScheduleManager />}
+      {activeTab === 'base-schedule-manager' && canManageEmployees() && <BaseScheduleManager />}
 
       {activeTab === 'schedule-generator' && <ScheduleGenerator />}
+
+      {activeTab === 'user-management' && canManageUserAccounts() && <UserManagement />}
     </div>
+  )
+}
+
+// Main App component with UserProvider wrapper
+function App() {
+  return (
+    <UserProvider>
+      <AppContent />
+    </UserProvider>
   )
 }
 

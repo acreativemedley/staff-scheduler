@@ -75,20 +75,130 @@ function EmployeeList() {
   }
 
   const deleteEmployee = async (employeeId, employeeName) => {
-    if (window.confirm(`Are you sure you want to delete ${employeeName}? This cannot be undone.`)) {
+    console.log('DELETE FUNCTION CALLED - START');
+    
+    if (window.confirm(`Are you sure you want to delete ${employeeName}? This will also delete all their schedules, availability, and time-off requests. This cannot be undone.`)) {
+      console.log('User confirmed delete');
       try {
-        const { error } = await supabase
+        console.log('Attempting to delete employee:', employeeId, employeeName);
+        console.log('Employee ID type:', typeof employeeId);
+        
+        // First, let's verify the employee exists
+        const { data: checkData, error: checkError } = await supabase
+          .from('employees')
+          .select('id, full_name')
+          .eq('id', employeeId);
+          
+        console.log('Employee exists check:', { checkData, checkError });
+        
+        if (checkError) {
+          console.error('Error checking employee exists:', checkError);
+          alert('Error checking employee: ' + checkError.message);
+          return;
+        }
+        
+        if (!checkData || checkData.length === 0) {
+          console.error('Employee not found with ID:', employeeId);
+          alert('Employee not found. The list may be out of date.');
+          fetchEmployees(); // Refresh the list
+          return;
+        }
+
+        // Delete all related records first to avoid foreign key constraints
+        console.log('Deleting related records...');
+
+        // Delete from base_schedule first
+        const { error: baseScheduleError } = await supabase
+          .from('base_schedule')
+          .delete()
+          .eq('employee_id', employeeId);
+        
+        if (baseScheduleError) {
+          console.log('Error deleting base schedule (may not exist):', baseScheduleError);
+        } else {
+          console.log('Deleted employee base schedule');
+        }
+
+        // Delete from weekly_schedules
+        const { error: scheduleError } = await supabase
+          .from('weekly_schedules')
+          .delete()
+          .eq('employee_id', employeeId);
+        
+        if (scheduleError) {
+          console.log('Error deleting schedules (may not exist):', scheduleError);
+        } else {
+          console.log('Deleted employee schedules');
+        }
+
+        // Delete from employee_availability
+        const { error: availError } = await supabase
+          .from('employee_availability')
+          .delete()
+          .eq('employee_id', employeeId);
+        
+        if (availError) {
+          console.log('Error deleting availability (may not exist):', availError);
+        } else {
+          console.log('Deleted employee availability');
+        }
+
+        // Delete from time_off_requests (both as employee and as reviewer)
+        const { error: timeoffError } = await supabase
+          .from('time_off_requests')
+          .delete()
+          .or(`employee_id.eq.${employeeId},reviewed_by.eq.${employeeId}`);
+        
+        if (timeoffError) {
+          console.log('Error deleting time-off requests (may not exist):', timeoffError);
+        } else {
+          console.log('Deleted employee time-off requests');
+        }
+        
+        // Now try to delete the employee
+        console.log('Deleting employee record...');
+        
+        // Let's check one more time that the employee still exists after cleanup
+        const { data: finalCheckData } = await supabase
+          .from('employees')
+          .select('id, full_name')
+          .eq('id', employeeId);
+        console.log('Final employee exists check before delete:', finalCheckData);
+        
+        const { data, error } = await supabase
           .from('employees')
           .delete()
           .eq('id', employeeId)
+          .select();
+
+        console.log('Final delete result:', { data, error });
+        console.log('Final delete - Rows affected:', data?.length || 0);
 
         if (error) {
-          alert('Error deleting employee: ' + error.message)
+          console.error('Final supabase delete error:', error);
+          console.error('Error details:', error.details, error.hint, error.code);
+          alert('Error deleting employee: ' + error.message + (error.details ? '\nDetails: ' + error.details : ''));
+        } else if (!data || data.length === 0) {
+          console.error('Final delete - No rows were deleted. Employee may not exist or permission denied.');
+          console.log('This is likely due to Row Level Security (RLS) policies in Supabase.');
+          console.log('The employee exists but RLS is preventing deletion.');
+          
+          // Let's try to understand the RLS issue by checking what user we're authenticated as
+          const { data: userData, error: userError } = await supabase.auth.getUser();
+          console.log('Current authenticated user:', userData);
+          console.log('User error:', userError);
+          
+          alert('Unable to delete employee. This appears to be due to database Row Level Security policies.\n\n' +
+                'The employee exists but the database is preventing deletion. ' +
+                'Please check your Supabase RLS policies for the employees table.');
         } else {
-          fetchEmployees() // Refresh the list
+          console.log('Employee deleted successfully:', data);
+          alert('Employee and all related records deleted successfully');
+          fetchEmployees(); // Refresh the list
         }
       } catch (err) {
-        alert('Failed to delete employee')
+        console.error('Delete employee catch error:', err);
+        alert('Failed to delete employee: ' + err.message);
       }
     }
   }
@@ -152,6 +262,7 @@ function EmployeeList() {
                       >
                         <option value="Sales Floor">Sales Floor</option>
                         <option value="Teacher">Teacher</option>
+                        <option value="Tech">Tech</option>
                         <option value="Manager">Manager</option>
                         <option value="Owner">Owner</option>
                       </select>
