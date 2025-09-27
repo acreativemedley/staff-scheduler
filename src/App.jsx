@@ -11,7 +11,7 @@ import ScheduleTemplates from './ScheduleTemplates'
 import BaseScheduleManager from './BaseScheduleManager'
 import ScheduleGenerator from './ScheduleGenerator'
 import UserManagement from './UserManagement'
-import { UserProvider, useUser } from './UserContext'
+import { UserProvider, useUser } from './UserContext-Simplified'
 import './App.css'
 
 function AppContent() {

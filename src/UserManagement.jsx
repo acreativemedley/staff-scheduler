@@ -4,7 +4,19 @@ import { supabase } from './supabase'
 import { useUser } from './UserContext'
 
 export default function UserManagement() {
-  const { canManageUserAccounts } = useUser()
+  const userContext = useUser()
+  console.log('UserManagement: userContext received:', userContext)
+  
+  // Handle case where context might not be fully loaded
+  const canManageUserAccounts = userContext?.canManageUserAccounts || (() => {
+    console.log('UserManagement: No canManageUserAccounts function found, defaulting to false')
+    return false
+  })
+  
+  console.log('UserManagement: canManageUserAccounts function:', canManageUserAccounts)
+  const hasPermission = canManageUserAccounts()
+  console.log('UserManagement: Permission check result:', hasPermission)
+  
   const [users, setUsers] = useState([])
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
@@ -13,7 +25,8 @@ export default function UserManagement() {
   const [editForm, setEditForm] = useState({})
 
   // Redirect if no permission
-  if (!canManageUserAccounts()) {
+  if (!hasPermission) {
+    console.log('UserManagement: Access denied, showing error message')
     return (
       <div style={{ 
         padding: '2rem', 
@@ -25,6 +38,9 @@ export default function UserManagement() {
       }}>
         <h2>Access Denied</h2>
         <p>You don't have permission to access user management.</p>
+        <p style={{ fontSize: '0.875rem', color: '#666', marginTop: '1rem' }}>
+          Debug: Permission check returned {String(hasPermission)}
+        </p>
       </div>
     )
   }
@@ -34,19 +50,38 @@ export default function UserManagement() {
     const fetchData = async () => {
       try {
         setLoading(true)
+        console.log('UserManagement: Starting to fetch data...')
         
-        // Fetch user profiles
-        const { data: usersData, error: usersError } = await supabase
+        // Fetch user profiles with timeout
+        console.log('UserManagement: Fetching user profiles...')
+        const userProfilesPromise = supabase
           .from('user_profiles')
           .select('*')
           .order('created_at', { ascending: false })
 
+        // Set a timeout for the query
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout')), 5000)
+        )
+
+        const { data: usersData, error: usersError } = await Promise.race([
+          userProfilesPromise,
+          timeoutPromise
+        ])
+
+        console.log('UserManagement: User profiles result:', { usersData, usersError })
+
         if (usersError) {
-          setError('Error loading users: ' + usersError.message)
-          return
+          console.error('UserManagement: Error loading users:', usersError)
+          setError('Error loading users: ' + usersError.message + '. Try refreshing the page.')
+          setUsers([]) // Set empty array instead of leaving undefined
+        } else {
+          setUsers(usersData || [])
+          console.log('UserManagement: Successfully loaded', usersData?.length || 0, 'users')
         }
 
         // Fetch employees for linking
+        console.log('UserManagement: Fetching employees...')
         const { data: employeesData, error: employeesError } = await supabase
           .from('employees')
           .select('id, full_name')
@@ -54,17 +89,24 @@ export default function UserManagement() {
           .order('full_name')
 
         if (employeesError) {
-          console.error('Error loading employees:', employeesError)
+          console.error('UserManagement: Error loading employees:', employeesError)
+          setEmployees([]) // Set empty array
+        } else {
+          setEmployees(employeesData || [])
+          console.log('UserManagement: Successfully loaded', employeesData?.length || 0, 'employees')
         }
 
-        setUsers(usersData || [])
-        setEmployees(employeesData || [])
-        setError('')
+        if (!usersError) {
+          setError('')
+        }
       } catch (err) {
-        console.error('Error fetching data:', err)
-        setError('Failed to load data')
+        console.error('UserManagement: Error fetching data:', err)
+        setError('Failed to load data: ' + err.message + '. The database may be having issues.')
+        setUsers([])
+        setEmployees([])
       } finally {
         setLoading(false)
+        console.log('UserManagement: Finished loading data')
       }
     }
 
@@ -148,6 +190,66 @@ export default function UserManagement() {
       <p style={{ color: '#666', marginBottom: '2rem' }}>
         Manage user accounts and permissions. Only administrators can access this section.
       </p>
+
+      {/* Debug Info */}
+      <div style={{ 
+        marginBottom: '2rem', 
+        padding: '1rem', 
+        backgroundColor: '#f8f9fa', 
+        borderRadius: '4px',
+        fontSize: '0.875rem',
+        color: '#666'
+      }}>
+        <strong>Debug Info:</strong><br />
+        Loading: {loading ? 'Yes' : 'No'}<br />
+        Users loaded: {users.length}<br />
+        Employees loaded: {employees.length}<br />
+        {error && <span style={{ color: '#dc2626' }}>Error: {error}</span>}
+      </div>
+
+      {/* Manual Refresh Button */}
+      <div style={{ marginBottom: '2rem' }}>
+        <button
+          onClick={() => window.location.reload()}
+          style={{
+            padding: '0.5rem 1rem',
+            backgroundColor: '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            marginRight: '1rem'
+          }}
+        >
+          Refresh Page
+        </button>
+        <button
+          onClick={async () => {
+            setLoading(true)
+            try {
+              console.log('Manual fetch attempt...')
+              const { data, error } = await supabase.from('user_profiles').select('*')
+              console.log('Manual fetch result:', { data, error })
+              if (data) setUsers(data)
+              if (error) setError('Manual fetch error: ' + error.message)
+            } catch (err) {
+              setError('Manual fetch failed: ' + err.message)
+            } finally {
+              setLoading(false)
+            }
+          }}
+          style={{
+            padding: '0.5rem 1rem',
+            backgroundColor: '#10b981',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          Manual Fetch Users
+        </button>
+      </div>
 
       <div style={{ display: 'grid', gap: '1rem' }}>
         {users.map((user) => (
