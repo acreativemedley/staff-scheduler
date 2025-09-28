@@ -29,20 +29,26 @@ export default function AvailabilityOverview() {
   const fetchAvailabilityOverview = async () => {
     setLoading(true);
     try {
+      console.log('AvailabilityOverview: Starting to fetch data...');
+      
       // Fetch employees
+      console.log('AvailabilityOverview: Fetching employees...');
       const { data: employeesData, error: employeesError } = await supabase
         .from('employees')
         .select('id, full_name, display_name, position')
         .order('full_name');
 
+      console.log('AvailabilityOverview: Employees result:', { employeesData, employeesError });
       if (employeesError) throw employeesError;
 
       // Fetch all availability data
+      console.log('AvailabilityOverview: Fetching availability data...');
       const { data: availabilityData, error: availabilityError } = await supabase
         .from('employee_availability')
         .select('*')
         .order('day_of_week');
 
+      console.log('AvailabilityOverview: Availability result:', { availabilityData, availabilityError });
       if (availabilityError) throw availabilityError;
 
       // Organize availability by employee
@@ -56,9 +62,11 @@ export default function AvailabilityOverview() {
 
       setEmployees(employeesData || []);
       setAvailability(availabilityByEmployee);
+      console.log('AvailabilityOverview: Data successfully loaded');
     } catch (error) {
-      console.error('Error fetching availability overview:', error);
+      console.error('AvailabilityOverview: Error fetching availability overview:', error);
     }
+    console.log('AvailabilityOverview: Setting loading to false');
     setLoading(false);
   };
 

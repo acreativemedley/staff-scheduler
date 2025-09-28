@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabase';
+import { parseDate, formatDateForInput, formatDateDisplay, getWeekDates, isDateInRange, isSameDay } from './dateUtils';
 
 export default function ScheduleGenerator() {
   const [employees, setEmployees] = useState([]);
@@ -35,14 +36,17 @@ export default function ScheduleGenerator() {
   }, []);
 
   useEffect(() => {
-    if (currentWeek && employees.length > 0 && scheduleTemplates.length > 0) {
+    if (currentWeek && employees.length > 0) {
+      console.log('ScheduleGenerator: Triggering generateBaseSchedule - currentWeek:', currentWeek, 'employees:', employees.length)
       generateBaseSchedule();
+    } else {
+      console.log('ScheduleGenerator: Not ready to generate - currentWeek:', currentWeek, 'employees:', employees.length)
     }
-  }, [currentWeek, employees, scheduleTemplates, timeOffRequests]);
+  }, [currentWeek, employees, timeOffRequests]);
 
   useEffect(() => {
     if (currentWeek) {
-      const weekStart = new Date(currentWeek + 'T00:00:00');
+      const weekStart = parseDate(currentWeek);
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
       weekEnd.setHours(23, 59, 59, 999); // End of day
@@ -52,6 +56,7 @@ export default function ScheduleGenerator() {
   }, [currentWeek]);
 
   const initializeData = async () => {
+    console.log('ScheduleGenerator: Starting initialization...')
     setLoading(true);
     try {
       await Promise.all([
@@ -69,6 +74,7 @@ export default function ScheduleGenerator() {
       const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
       setCurrentMonth(formatDateForInput(firstOfMonth));
       
+      console.log('ScheduleGenerator: Initialization complete')
       setLoading(false);
     } catch (error) {
       console.error('ScheduleGenerator: Error during initialization:', error);
@@ -77,28 +83,36 @@ export default function ScheduleGenerator() {
   };
 
   const fetchEmployees = async () => {
+    console.log('ScheduleGenerator: Fetching employees...')
     const { data, error } = await supabase
       .from('employees')
       .select('*')
       .order('full_name');
     
+    console.log('ScheduleGenerator: Employees fetch result:', { data, error, count: data?.length })
+    
     if (error) {
-      console.error('Error fetching employees:', error);
+      console.error('ScheduleGenerator: Error fetching employees:', error);
     } else {
+      console.log('ScheduleGenerator: Setting employees:', data?.length || 0, 'employees')
       setEmployees(data || []);
     }
   };
 
   const fetchScheduleTemplates = async () => {
+    console.log('ScheduleGenerator: Fetching schedule templates...')
     const { data, error } = await supabase
       .from('schedule_templates')
       .select('*')
       .eq('is_active', true)
       .order('day_of_week');
     
+    console.log('ScheduleGenerator: Schedule templates fetch result:', { data, error, count: data?.length })
+    
     if (error) {
-      console.error('Error fetching templates:', error);
+      console.error('ScheduleGenerator: Error fetching templates:', error);
     } else {
+      console.log('ScheduleGenerator: Setting templates:', data?.length || 0, 'templates')
       setScheduleTemplates(data || []);
     }
   };
@@ -118,75 +132,9 @@ export default function ScheduleGenerator() {
 
   const fetchGoogleCalendarEvents = async (startDate, endDate) => {
     try {
-      console.log('Fetching actual Google Calendar events for:', startDate, 'to', endDate);
+      console.log('Fetching Google Calendar events from public iCal feed for:', startDate, 'to', endDate);
       
-      // Try direct Google Calendar API approach for public calendar
-      const timeMin = startDate.toISOString();
-      const timeMax = endDate.toISOString();
-      
-      // For public calendars, we can try the Calendar API without a key
-      const calendarApiUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(GOOGLE_CALENDAR_ID)}/events?` +
-        `timeMin=${encodeURIComponent(timeMin)}&` +
-        `timeMax=${encodeURIComponent(timeMax)}&` +
-        `orderBy=startTime&` +
-        `singleEvents=true`;
-
-      console.log('Trying Calendar API URL:', calendarApiUrl);
-
-      try {
-        const response = await fetch(calendarApiUrl);
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Calendar API response:', data);
-          
-          const events = {};
-
-          // Group events by date
-          data.items?.forEach(event => {
-            if (event.start && event.summary) {
-              let eventDate;
-              
-              // Handle all-day events
-              if (event.start.date) {
-                eventDate = new Date(event.start.date + 'T00:00:00');
-              } else if (event.start.dateTime) {
-                eventDate = new Date(event.start.dateTime);
-              } else {
-                return; // Skip events without valid dates
-              }
-
-              const dateKey = formatDateForInput(eventDate);
-              
-              if (!events[dateKey]) {
-                events[dateKey] = [];
-              }
-
-              const eventData = {
-                id: event.id,
-                title: event.summary,
-                description: event.description || '',
-                isAllDay: !!event.start.date,
-                startTime: event.start.date ? null : event.start.dateTime,
-                endTime: event.end?.date ? null : event.end?.dateTime
-              };
-
-              events[dateKey].push(eventData);
-            }
-          });
-
-          console.log('Processed calendar events:', events);
-          setCalendarEvents(events);
-          return; // Success, exit function
-        } else {
-          console.log('Calendar API failed with status:', response.status);
-          throw new Error(`Calendar API failed: ${response.status}`);
-        }
-      } catch (apiError) {
-        console.log('Calendar API approach failed:', apiError.message);
-      }
-
-      // Fallback: Try using CORS proxy with the iCal feed
+      // Use CORS proxy with the iCal feed
       console.log('Trying iCal feed with CORS proxy...');
       
       const icalUrl = `https://calendar.google.com/calendar/ical/${encodeURIComponent(GOOGLE_CALENDAR_ID)}/public/basic.ics`;
@@ -277,28 +225,41 @@ export default function ScheduleGenerator() {
           try {
             const eventDate = parseICSDateTime(currentEvent.dtstart);
             console.log('Parsed event date:', eventDate, 'for event:', currentEvent.summary);
+            console.log('Date range check - Event date:', eventDate, 'Start:', startDate, 'End:', endDate);
             
-            if (eventDate && eventDate >= startDate && eventDate <= endDate) {
-              const dateKey = formatDateForInput(eventDate);
-              console.log('Event in date range, adding to:', dateKey);
+            if (eventDate) {
+              // For date range comparison, we need to compare the calendar dates
+              // rather than exact timestamps to handle timezone differences
+              const eventDateOnly = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+              const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+              const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
               
-              if (!events[dateKey]) {
-                events[dateKey] = [];
+              console.log('Date-only comparison - Event:', eventDateOnly, 'Start:', startDateOnly, 'End:', endDateOnly);
+              
+              if (eventDateOnly >= startDateOnly && eventDateOnly <= endDateOnly) {
+                const dateKey = formatDateForInput(eventDate);
+                console.log('Event in date range, adding to:', dateKey);
+                
+                if (!events[dateKey]) {
+                  events[dateKey] = [];
+                }
+                
+                events[dateKey].push({
+                  id: currentEvent.uid || `event-${Date.now()}-${Math.random()}`,
+                  title: currentEvent.summary,
+                  description: currentEvent.description || '',
+                  isAllDay: !currentEvent.dtstart.includes('T'),
+                  startTime: currentEvent.dtstart.includes('T') ? eventDate.toISOString() : null,
+                  endTime: currentEvent.dtend && currentEvent.dtend.includes('T') ? 
+                    parseICSDateTime(currentEvent.dtend)?.toISOString() : null
+                });
+                
+                console.log('Added event:', currentEvent.summary, 'to', dateKey);
+              } else {
+                console.log('Event outside date range:', eventDateOnly, 'not between', startDateOnly, 'and', endDateOnly);
               }
-              
-              events[dateKey].push({
-                id: currentEvent.uid || `event-${Date.now()}-${Math.random()}`,
-                title: currentEvent.summary,
-                description: currentEvent.description || '',
-                isAllDay: !currentEvent.dtstart.includes('T'),
-                startTime: currentEvent.dtstart.includes('T') ? eventDate.toISOString() : null,
-                endTime: currentEvent.dtend && currentEvent.dtend.includes('T') ? 
-                  parseICSDateTime(currentEvent.dtend)?.toISOString() : null
-              });
-              
-              console.log('Added event:', currentEvent.summary, 'to', dateKey);
             } else {
-              console.log('Event outside date range:', eventDate, 'not between', startDate, 'and', endDate);
+              console.log('Failed to parse event date for:', currentEvent.summary);
             }
           } catch (parseError) {
             console.warn('Error parsing event:', parseError, currentEvent);
@@ -350,16 +311,23 @@ export default function ScheduleGenerator() {
         const day = parseInt(icsDateTime.substr(6, 2));
         return new Date(year, month, day);
       } else if (icsDateTime.includes('T')) {
-        // YYYYMMDDTHHMMSSZ format
-        const dateTimePart = icsDateTime.replace('Z', '').replace(/[-:]/g, '');
-        const year = parseInt(dateTimePart.substr(0, 4));
-        const month = parseInt(dateTimePart.substr(4, 2)) - 1;
-        const day = parseInt(dateTimePart.substr(6, 2));
-        const hour = parseInt(dateTimePart.substr(9, 2)) || 0;
-        const minute = parseInt(dateTimePart.substr(11, 2)) || 0;
-        const second = parseInt(dateTimePart.substr(13, 2)) || 0;
-        
-        return new Date(year, month, day, hour, minute, second);
+        // YYYYMMDDTHHMMSSZ format (UTC time) or YYYYMMDDTHHMMSS (local time)
+        if (icsDateTime.endsWith('Z')) {
+          // UTC time - use Date constructor with ISO string format
+          const isoString = icsDateTime.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/, '$1-$2-$3T$4:$5:$6Z');
+          return new Date(isoString);
+        } else {
+          // Local time or no timezone specified - treat as local time
+          const dateTimePart = icsDateTime.replace(/[-:]/g, '');
+          const year = parseInt(dateTimePart.substr(0, 4));
+          const month = parseInt(dateTimePart.substr(4, 2)) - 1;
+          const day = parseInt(dateTimePart.substr(6, 2));
+          const hour = parseInt(dateTimePart.substr(9, 2)) || 0;
+          const minute = parseInt(dateTimePart.substr(11, 2)) || 0;
+          const second = parseInt(dateTimePart.substr(13, 2)) || 0;
+          
+          return new Date(year, month, day, hour, minute, second);
+        }
       }
     } catch (error) {
       console.warn('Error parsing ICS date:', icsDateTime, error);
@@ -383,73 +351,43 @@ export default function ScheduleGenerator() {
     return d;
   };
 
-  const formatDateForInput = (date) => {
-    // Handle different date input types
-    let dateObj;
-    
-    if (date instanceof Date) {
-      dateObj = date;
-    } else if (typeof date === 'string') {
-      // Fix timezone issue: parse date components manually to avoid UTC interpretation
-      const [year, month, day] = date.split('-').map(Number);
-      dateObj = new Date(year, month - 1, day); // month is 0-indexed
-    } else {
-      console.error('Invalid date passed to formatDateForInput:', date);
-      return new Date().toISOString().split('T')[0];
-    }
-    
-    if (isNaN(dateObj.getTime())) {
-      console.error('Invalid date passed to formatDateForInput:', date);
-      return new Date().toISOString().split('T')[0];
-    }
-    
-    // Format as YYYY-MM-DD in local time (not UTC)
-    const year = dateObj.getFullYear();
-    const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-    const day = dateObj.getDate().toString().padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  const getWeekDates = (sundayDate) => {
-    const dates = [];
-    const sunday = new Date(sundayDate);
-    
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(sunday);
-      date.setDate(sunday.getDate() + i);
-      dates.push(date);
-    }
-    
-    return dates;
-  };
-
-  const parseDate = (dateStr) => {
-    if (typeof dateStr === 'string') {
-      const [year, month, day] = dateStr.split('-').map(Number);
-      return new Date(year, month - 1, day); // month is 0-indexed
-    }
-    return dateStr; // already a Date object
-  };
+  // Use centralized date utilities - these functions are now imported from dateUtils.js
+  // Removed duplicate parseDate and formatDateForInput functions
 
   const isEmployeeOnTimeOff = (employeeId, date) => {
     // Handle both Date objects and date strings
     const dateStr = date instanceof Date ? formatDateForInput(date) : date;
     
-    return timeOffRequests.some(request => {
+    console.log(`\n🔍 isEmployeeOnTimeOff: Checking employee ${employeeId} for date ${dateStr}`);
+    console.log(`   Original date input:`, date);
+    console.log(`   Converted to string:`, dateStr);
+    
+    const result = timeOffRequests.some(request => {
       if (request.employee_id !== employeeId) return false;
+      
+      console.log(`   📋 Checking request: ${request.start_date} to ${request.end_date} (type: ${request.request_type})`);
       
       const startDate = parseDate(request.start_date);
       const endDate = parseDate(request.end_date);
       const checkDate = parseDate(dateStr);
       
+      console.log(`   📅 Parsed dates: start=${startDate.toDateString()}, end=${endDate.toDateString()}, check=${checkDate.toDateString()}`);
+      
       if (request.request_type === 'full_days') {
-        return checkDate >= startDate && checkDate <= endDate;
+        const isInRange = isDateInRange(checkDate, startDate, endDate);
+        console.log(`   📅 Full day check: ${checkDate.toDateString()} between ${startDate.toDateString()} and ${endDate.toDateString()} = ${isInRange}`);
+        return isInRange;
       } else if (request.request_type === 'partial_day') {
-        return checkDate.getTime() === startDate.getTime();
+        const isSame = isSameDay(checkDate, startDate);
+        console.log(`   📅 Partial day check: ${checkDate.toDateString()} === ${startDate.toDateString()} = ${isSame}`);
+        return isSame;
       }
       
       return false;
     });
+    
+    console.log(`   🎯 Final result for employee ${employeeId} on ${dateStr}: ${result}`);
+    return result;
   };
 
   const getPartialTimeOff = (employeeId, date) => {
@@ -463,7 +401,7 @@ export default function ScheduleGenerator() {
       const requestDate = parseDate(request.start_date);
       const checkDate = parseDate(dateStr);
       
-      return checkDate.getTime() === requestDate.getTime();
+      return isSameDay(checkDate, requestDate);
     });
   };
 
@@ -519,11 +457,13 @@ export default function ScheduleGenerator() {
       }
 
       // No existing schedule found, generate from base schedule
-      console.log('No existing schedule found, generating from base schedule');
+      console.log('No existing schedule found, generating from base schedule for week:', currentWeek)
       const { data: baseScheduleData, error: baseError } = await supabase
         .rpc('get_base_schedule_for_week', {
           p_week_start_date: currentWeek
         });
+        
+      console.log('Base schedule RPC result:', { baseScheduleData, baseError, count: baseScheduleData?.length })
         
       if (baseError) {
         console.error('Error fetching base schedule:', baseError);
@@ -536,7 +476,8 @@ export default function ScheduleGenerator() {
         console.log('Using base schedule data:', baseScheduleData);
         buildScheduleFromData(baseScheduleData, currentWeekDate);
       } else {
-        console.log('No base schedule found');
+        console.log('No base schedule found - this means your base_schedule table is empty');
+        console.log('You need to set up your base schedule using the Base Schedule Manager tab');
         alert('No base schedule found. Please set up your base schedule first using the Base Schedule Manager.');
       }
 
@@ -975,7 +916,7 @@ export default function ScheduleGenerator() {
 
   const printWeek = () => {
     const printWindow = window.open('', '_blank');
-    const weekDates = getWeekDates(new Date(currentWeek + 'T00:00:00'));
+    const weekDates = getWeekDates(parseDate(currentWeek));
     
     printWindow.document.write(`
       <html>
@@ -988,6 +929,11 @@ export default function ScheduleGenerator() {
             .day-header { font-weight: bold; background: #f0f0f0; padding: 5px; text-align: center; }
             .shift { margin: 2px 0; font-size: 12px; padding: 2px; background: #f9f9f9; }
             .conflict { background: #ffebee; }
+            .events-section { margin-top: 10px; padding-top: 8px; border-top: 2px solid #e5e7eb; }
+            .events-header { font-size: 11px; font-weight: bold; color: #374151; margin-bottom: 4px; text-align: center; }
+            .event { margin: 1px 0; font-size: 10px; padding: 3px 4px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 3px; color: #92400e; }
+            .event-title { font-weight: bold; }
+            .event-time { font-size: 9px; color: #78716c; }
             h1 { text-align: center; }
             @media print { body { margin: 0; } }
           </style>
@@ -999,6 +945,7 @@ export default function ScheduleGenerator() {
             ${weekDates.map(date => {
               const dateKey = formatDateForInput(date);
               const daySchedule = weeklySchedule[dateKey];
+              const dayEvents = calendarEvents[dateKey];
               return `
                 <div class="day-column">
                   <div class="day-header">${formatDateHeader(date)}</div>
@@ -1008,6 +955,21 @@ export default function ScheduleGenerator() {
                       ${formatTime(shift.start_time)} - ${formatTime(shift.end_time)}
                     </div>`
                   ).join('') : '<div>No schedule</div>'}
+                  ${dayEvents && dayEvents.length > 0 ? `
+                    <div class="events-section">
+                      <div class="events-header">📅 Store Events</div>
+                      ${dayEvents.map(event => `
+                        <div class="event">
+                          <div class="event-title">${event.title}</div>
+                          ${!event.isAllDay && event.startTime && event.endTime ? `
+                            <div class="event-time">${new Date(event.startTime).toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit', hour12: true})} - ${new Date(event.endTime).toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit', hour12: true})}</div>
+                          ` : event.isAllDay ? `
+                            <div class="event-time">All Day</div>
+                          ` : ''}
+                        </div>
+                      `).join('')}
+                    </div>
+                  ` : ''}
                 </div>
               `;
             }).join('')}
@@ -1020,69 +982,235 @@ export default function ScheduleGenerator() {
     printWindow.print();
   };
 
-  const printMonth = () => {
-    const printWindow = window.open('', '_blank');
-    const monthDates = getMonthDates(currentMonth);
-    const weeks = [];
+  const printMonth = async () => {
+    console.log('🖨️ PrintMonth: Function called - starting');
     
-    // Group dates into weeks
-    for (let i = 0; i < monthDates.length; i += 7) {
-      weeks.push(monthDates.slice(i, i + 7));
+    try {
+      console.log('🖨️ PrintMonth: Inside try block');
+      // Load monthly schedule data first
+      const monthDates = getMonthDates(currentMonth);
+      console.log('🖨️ PrintMonth: Month dates:', monthDates.length, 'dates');
+      
+      const startDate = monthDates[0];
+      const endDate = monthDates[monthDates.length - 1];
+      
+      console.log('🖨️ PrintMonth: Loading schedule data from', formatDateForInput(startDate), 'to', formatDateForInput(endDate));
+      
+      // Get all schedule data for the month
+      const { data: scheduleData, error } = await supabase
+        .from('weekly_schedules')
+        .select('*')
+        .gte('schedule_date', formatDateForInput(startDate))
+        .lte('schedule_date', formatDateForInput(endDate))
+        .order('schedule_date');
+      
+      if (error) {
+        console.error('🖨️ PrintMonth: Database error:', error);
+        alert('Error loading schedule data for printing: ' + error.message);
+        return;
+      }
+      
+      console.log('🖨️ PrintMonth: Loaded', scheduleData?.length, 'schedule entries');
+      
+      if (!scheduleData || scheduleData.length === 0) {
+        console.warn('🖨️ PrintMonth: No schedule data found for this month');
+        alert('No schedule data found for this month. Make sure you have saved some schedules first.');
+        return;
+      }
+      
+      // Build monthly schedule data structure
+      const monthlyScheduleData = {};
+      scheduleData.forEach(entry => {
+        console.log('🖨️ PrintMonth: Processing entry for', entry.schedule_date, '- Employee:', entry.employee_id);
+        const dateKey = entry.schedule_date;
+        if (!monthlyScheduleData[dateKey]) {
+          monthlyScheduleData[dateKey] = { shifts: [] };
+        }
+        
+        // Each database entry IS a shift, not a container of shifts
+        const shift = {
+          id: `${entry.employee_id}-${entry.schedule_date}`,
+          employee: {
+            id: entry.employee_id,
+            display_name: employees.find(emp => emp.id === entry.employee_id)?.display_name || 
+                         employees.find(emp => emp.id === entry.employee_id)?.full_name || 
+                         'Unknown Employee'
+          },
+          start_time: entry.start_time,
+          end_time: entry.end_time,
+          position: entry.position,
+          notes: entry.notes || '',
+          isFromBase: entry.is_from_base
+        };
+        
+        monthlyScheduleData[dateKey].shifts.push(shift);
+        console.log('🖨️ PrintMonth: Added shift for', shift.employee.display_name, 'on', dateKey);
+      });
+      
+      console.log('🖨️ PrintMonth: Built schedule data for', Object.keys(monthlyScheduleData).length, 'days');
+      console.log('🖨️ PrintMonth: Days with shifts:', Object.entries(monthlyScheduleData).filter(([key, data]) => data.shifts.length > 0).map(([key]) => key));
+      
+      // Create print window and generate content
+      console.log('🖨️ PrintMonth: Creating print window');
+      const printWindow = window.open('', '_blank');
+      
+      if (!printWindow) {
+        alert('Unable to open print window. Please allow popups for this site.');
+        return;
+      }
+      
+      const weeks = [];
+      
+      // Group dates into weeks
+      for (let i = 0; i < monthDates.length; i += 7) {
+        weeks.push(monthDates.slice(i, i + 7));
+      }
+      
+      console.log('🖨️ PrintMonth: Writing HTML content');
+      
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Monthly Schedule - ${formatMonthYear(currentMonth)}</title>
+            <style>
+              body { 
+                font-family: Arial, sans-serif; 
+                margin: 10px; 
+                font-size: 12px;
+              }
+              h1 { 
+                text-align: center; 
+                margin: 5px 0 10px 0; 
+                font-size: 18px;
+                font-weight: bold;
+              }
+              .generated-info { 
+                text-align: center; 
+                font-size: 9px; 
+                color: #666; 
+                margin: 0 0 10px 0;
+              }
+              .month-grid { 
+                display: grid; 
+                grid-template-columns: repeat(7, 1fr); 
+                gap: 1px; 
+                border: 1px solid #000; 
+                width: 100%;
+              }
+              .day-cell { 
+                border: 1px solid #000; 
+                padding: 2px; 
+                min-height: 70px; 
+                font-size: 10px;
+              }
+              .day-number { 
+                font-weight: bold; 
+                margin-bottom: 1px; 
+                font-size: 11px;
+              }
+              .other-month { 
+                color: #999; 
+                background: #f5f5f5; 
+              }
+              .shift { 
+                font-size: 10px; 
+                margin: 1px 0; 
+                padding: 1px 2px; 
+                background: #e6f3ff; 
+                border-radius: 2px; 
+                line-height: 1.2;
+              }
+              .employee-name { 
+                font-weight: bold; 
+                font-size: 10px;
+              }
+              .shift-time { 
+                color: #555; 
+                font-size: 9px;
+              }
+              .day-header { 
+                font-weight: bold; 
+                background: #ddd; 
+                padding: 3px; 
+                text-align: center; 
+                font-size: 10px;
+                border-bottom: 1px solid #000;
+              }
+              .summary { 
+                text-align: center; 
+                margin-top: 10px; 
+                font-size: 9px; 
+                color: #666;
+              }
+              @media print { 
+                body { margin: 0; font-size: 11px; } 
+                .month-grid { 
+                  page-break-inside: avoid; 
+                  width: 98%; 
+                  margin: 0 auto;
+                }
+                h1 { font-size: 16px; margin: 0 0 5px 0; }
+                .generated-info { font-size: 8px; margin: 0 0 5px 0; }
+                .day-cell { min-height: 65px; }
+                .shift { font-size: 9px; }
+                .employee-name { font-size: 9px; }
+                .shift-time { font-size: 8px; }
+                @page { 
+                  margin: 0.4in; 
+                  size: letter portrait;
+                }
+              }
+            </style>
+          </head>
+          <body>
+            <h1>${formatMonthYear(currentMonth)}</h1>
+            <div class="generated-info">Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</div>
+            <div class="month-grid">
+              <div class="day-header">Sun</div>
+              <div class="day-header">Mon</div>
+              <div class="day-header">Tue</div>
+              <div class="day-header">Wed</div>
+              <div class="day-header">Thu</div>
+              <div class="day-header">Fri</div>
+              <div class="day-header">Sat</div>
+              ${monthDates.map(date => {
+                const dateKey = formatDateForInput(date);
+                const currentMonthDate = parseDate(currentMonth);
+                const isCurrentMonth = date.getMonth() === currentMonthDate.getMonth();
+                const daySchedule = monthlyScheduleData[dateKey];
+                
+                return `
+                  <div class="day-cell ${!isCurrentMonth ? 'other-month' : ''}">
+                    <div class="day-number">${date.getDate()}</div>
+                    ${daySchedule && daySchedule.shifts && daySchedule.shifts.length > 0 ? daySchedule.shifts.map(shift => 
+                      `<div class="shift">
+                        <div class="employee-name">${shift.employee?.display_name || shift.employee?.name || 'Unknown'}</div>
+                        <div class="shift-time">${formatTimeShort(shift.start_time)}-${formatTimeShort(shift.end_time)}</div>
+                      </div>`
+                    ).join('') : ''}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </body>
+        </html>
+      `);
+      
+      printWindow.document.close();
+      printWindow.focus();
+      
+      console.log('🖨️ PrintMonth: Content written, focusing window');
+      
+      // Wait a moment for content to load, then print
+      setTimeout(() => {
+        console.log('🖨️ PrintMonth: Triggering print dialog');
+        printWindow.print();
+      }, 1000);
+      
+    } catch (error) {
+      console.error('🖨️ PrintMonth: Error:', error);
+      alert('Error generating printable schedule: ' + error.message);
     }
-    
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Monthly Schedule - ${formatMonthYear(currentMonth)}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; border: 1px solid #000; }
-            .day-cell { border: 1px solid #000; padding: 4px; min-height: 80px; }
-            .day-number { font-weight: bold; margin-bottom: 2px; }
-            .other-month { color: #ccc; background: #f9f9f9; }
-            .shift { font-size: 10px; margin: 2px 0; padding: 2px; background: #f0f8ff; border-radius: 2px; }
-            .employee-name { font-weight: bold; }
-            .shift-time { color: #666; font-size: 9px; }
-            .day-header { font-weight: bold; background: #f0f0f0; padding: 5px; text-align: center; }
-            h1 { text-align: center; }
-            @media print { body { margin: 0; } }
-          </style>
-        </head>
-        <body>
-          <h1>Monthly Schedule - ${formatMonthYear(currentMonth)}</h1>
-          <div class="month-grid">
-            <div class="day-header">Sun</div>
-            <div class="day-header">Mon</div>
-            <div class="day-header">Tue</div>
-            <div class="day-header">Wed</div>
-            <div class="day-header">Thu</div>
-            <div class="day-header">Fri</div>
-            <div class="day-header">Sat</div>
-            ${monthDates.map(date => {
-              const dateKey = formatDateForInput(date);
-              const currentMonthDate = new Date(currentMonth + 'T00:00:00');
-              const isCurrentMonth = date.getMonth() === currentMonthDate.getMonth();
-              const daySchedule = weeklySchedule[dateKey];
-              
-              return `
-                <div class="day-cell ${!isCurrentMonth ? 'other-month' : ''}">
-                  <div class="day-number">${date.getDate()}</div>
-                  ${daySchedule ? daySchedule.shifts.map(shift => 
-                    `<div class="shift">
-                      <div class="employee-name">${shift.employee.display_name}</div>
-                      <div class="shift-time">${formatTimeShort(shift.start_time)} - ${formatTimeShort(shift.end_time)}</div>
-                    </div>`
-                  ).join('') : ''}
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </body>
-      </html>
-    `);
-    
-    printWindow.document.close();
-    printWindow.print();
   };
 
   if (loading) {
@@ -1092,6 +1220,10 @@ export default function ScheduleGenerator() {
       </div>
     );
   }
+
+  // Debug display
+  console.log('ScheduleGenerator: Rendering with employees:', employees.length)
+  console.log('ScheduleGenerator: Employees:', employees)
 
   if (!currentWeek) {
     return (
@@ -1196,7 +1328,7 @@ export default function ScheduleGenerator() {
                 type="date"
                 value={currentWeek}
                 onChange={(e) => {
-                  const selectedDate = new Date(e.target.value + 'T00:00:00');
+                  const selectedDate = parseDate(e.target.value);
                   const sunday = getSunday(selectedDate);
                   setCurrentWeek(formatDateForInput(sunday));
                 }}
@@ -1495,14 +1627,18 @@ export default function ScheduleGenerator() {
           </div>
         </div>
       ) : (
-        <MonthView 
-          currentMonth={currentMonth}
-          weeklySchedule={weeklySchedule}
-          formatDateHeader={formatDateHeader}
-          formatDateForInput={formatDateForInput}
-          formatTimeShort={formatTimeShort}
-          addShift={addShift}
-        />
+        <>
+          {console.log('MonthView: Rendering month view with currentMonth:', currentMonth)}
+          <MonthView 
+            currentMonth={currentMonth}
+            formatDateHeader={formatDateHeader}
+            formatDateForInput={formatDateForInput}
+            formatTimeShort={formatTimeShort}
+            addShift={addShift}
+            employees={employees}
+            timeOffRequests={timeOffRequests}
+          />
+        </>
       )}
 
       {/* Legend */}
@@ -1700,12 +1836,135 @@ export default function ScheduleGenerator() {
 // MonthView Component
 function MonthView({ 
   currentMonth, 
-  weeklySchedule, 
   formatDateHeader, 
   formatDateForInput, 
   formatTimeShort,
-  addShift 
+  addShift,
+  employees,
+  timeOffRequests
 }) {
+  const [monthlySchedule, setMonthlySchedule] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadMonthlySchedule();
+  }, [currentMonth]);
+
+  const loadMonthlySchedule = async () => {
+    if (!currentMonth) return;
+    
+    setLoading(true);
+    console.log('MonthView: Loading schedule data for month:', currentMonth);
+    
+    try {
+      // Get the full date range for the month calendar (including partial weeks)
+      const monthDates = getMonthDates(new Date(currentMonth + 'T00:00:00'));
+      const startDate = monthDates[0];
+      const endDate = monthDates[monthDates.length - 1];
+      
+      console.log('MonthView: Date range:', formatDateForInput(startDate), 'to', formatDateForInput(endDate));
+      
+      // Load all weekly schedules that overlap with this month view
+      const { data: scheduleData, error } = await supabase
+        .from('weekly_schedules')
+        .select(`
+          id,
+          week_start_date,
+          employee_id,
+          schedule_date,
+          start_time,
+          end_time,
+          position,
+          notes,
+          is_from_base,
+          employees!inner(id, full_name, display_name, position, role)
+        `)
+        .gte('schedule_date', formatDateForInput(startDate))
+        .lte('schedule_date', formatDateForInput(endDate))
+        .order('schedule_date', { ascending: true })
+        .order('start_time', { ascending: true });
+
+      console.log('MonthView: Query result:', { scheduleData, error, count: scheduleData?.length });
+
+      if (error) {
+        console.error('MonthView: Error loading schedule data:', error);
+        setMonthlySchedule({});
+      } else {
+        console.log('MonthView: Raw schedule data:', scheduleData);
+        if (scheduleData && scheduleData.length > 0) {
+          console.log('MonthView: First few entries:', scheduleData.slice(0, 3));
+          console.log('MonthView: Date range of data:', scheduleData[0]?.schedule_date, 'to', scheduleData[scheduleData.length - 1]?.schedule_date);
+        }
+        buildMonthlyScheduleData(scheduleData || []);
+      }
+      
+      // Also check what weeks have been saved in weekly_schedules
+      const { data: weeklyData, error: weeklyError } = await supabase
+        .from('weekly_schedules')
+        .select('week_start_date, schedule_date')
+        .gte('schedule_date', formatDateForInput(startDate))
+        .lte('schedule_date', formatDateForInput(endDate));
+      
+      console.log('MonthView: Weeks with saved data:', weeklyData?.map(d => d.week_start_date).filter((v, i, a) => a.indexOf(v) === i));
+    } catch (err) {
+      console.error('MonthView: Error:', err);
+      setMonthlySchedule({});
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const buildMonthlyScheduleData = (scheduleData) => {
+    const monthlyData = {};
+    
+    scheduleData.forEach(entry => {
+      const dateKey = entry.schedule_date;
+      
+      if (!monthlyData[dateKey]) {
+        monthlyData[dateKey] = {
+          shifts: [],
+          events: []
+        };
+      }
+      
+      monthlyData[dateKey].shifts.push({
+        id: entry.id,
+        employee: {
+          id: entry.employees.id,
+          full_name: entry.employees.full_name,
+          display_name: entry.employees.display_name || entry.employees.full_name,
+          position: entry.employees.position,
+          role: entry.employees.role
+        },
+        start_time: entry.start_time,
+        end_time: entry.end_time,
+        position: entry.position,
+        notes: entry.notes,
+        is_from_base: entry.is_from_base,
+        // Add time off conflict checking
+        conflict: checkTimeOffConflict(entry.employee_id, dateKey, entry.start_time, entry.end_time),
+        partialTimeOff: checkPartialTimeOffConflict(entry.employee_id, dateKey, entry.start_time, entry.end_time)
+      });
+    });
+    
+    console.log('MonthView: Built monthly schedule data:', monthlyData);
+    setMonthlySchedule(monthlyData);
+  };
+
+  const checkTimeOffConflict = (employeeId, date, startTime, endTime) => {
+    return timeOffRequests.some(request => 
+      request.employee_id === employeeId &&
+      request.status === 'approved' &&
+      request.start_date <= date &&
+      request.end_date >= date
+    );
+  };
+
+  const checkPartialTimeOffConflict = (employeeId, date, startTime, endTime) => {
+    // This could be expanded to check for partial day conflicts
+    return false;
+  };
+
   const getMonthDates = (date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -1740,6 +1999,21 @@ function MonthView({
     weeks.push(monthDates.slice(i, i + 7));
   }
 
+  if (loading) {
+    return (
+      <div style={{ 
+        border: '1px solid #d1d5db',
+        borderRadius: '8px',
+        backgroundColor: 'white',
+        width: '100%',
+        padding: '2rem',
+        textAlign: 'center'
+      }}>
+        Loading monthly schedule...
+      </div>
+    );
+  }
+
   return (
     <div style={{ 
       border: '1px solid #d1d5db',
@@ -1771,7 +2045,7 @@ function MonthView({
         }}>
           {week.map((date, dayIndex) => {
             const dateKey = formatDateForInput(date);
-            const daySchedule = weeklySchedule[dateKey];
+            const daySchedule = monthlySchedule[dateKey];
             const currentMonthDate = new Date(currentMonth + 'T00:00:00');
             const isCurrentMonth = date.getMonth() === currentMonthDate.getMonth();
             

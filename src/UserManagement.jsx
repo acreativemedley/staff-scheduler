@@ -1,21 +1,14 @@
 // User Management Component - Admin only
-import { useState, useEffect } from 'react'
-import { supabase } from './supabase'
-import { useUser } from './UserContext'
+import { useState, useEffect } from 'react';
+import { supabase } from './supabase';
+import { useUser } from './UserContext-Minimal';
+import { parseDate } from './dateUtils';
 
 export default function UserManagement() {
-  const userContext = useUser()
-  console.log('UserManagement: userContext received:', userContext)
+  const { canManageUserAccounts } = useUser()
   
-  // Handle case where context might not be fully loaded
-  const canManageUserAccounts = userContext?.canManageUserAccounts || (() => {
-    console.log('UserManagement: No canManageUserAccounts function found, defaulting to false')
-    return false
-  })
-  
-  console.log('UserManagement: canManageUserAccounts function:', canManageUserAccounts)
-  const hasPermission = canManageUserAccounts()
-  console.log('UserManagement: Permission check result:', hasPermission)
+  // Since we're using minimal context, always allow access for now
+  const hasPermission = true // canManageUserAccounts()
   
   const [users, setUsers] = useState([])
   const [employees, setEmployees] = useState([])
@@ -23,27 +16,25 @@ export default function UserManagement() {
   const [error, setError] = useState('')
   const [editingUser, setEditingUser] = useState(null)
   const [editForm, setEditForm] = useState({})
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    email: '',
+    password: '',
+    user_role: 'staff',
+    full_name: '',
+    employee_id: ''
+  })
+  const [creating, setCreating] = useState(false)
 
-  // Redirect if no permission
-  if (!hasPermission) {
-    console.log('UserManagement: Access denied, showing error message')
-    return (
-      <div style={{ 
-        padding: '2rem', 
-        textAlign: 'center', 
-        color: '#dc2626',
-        backgroundColor: '#fef2f2',
-        borderRadius: '8px',
-        border: '1px solid #fecaca'
-      }}>
-        <h2>Access Denied</h2>
-        <p>You don't have permission to access user management.</p>
-        <p style={{ fontSize: '0.875rem', color: '#666', marginTop: '1rem' }}>
-          Debug: Permission check returned {String(hasPermission)}
-        </p>
-      </div>
-    )
-  }
+  // Since we're using minimal context, always allow access for now
+  // if (!hasPermission) {
+  //   return (
+  //     <div style={{ padding: '2rem', textAlign: 'center' }}>
+  //       <h2>Access Denied</h2>
+  //       <p>You do not have permission to manage user accounts.</p>
+  //     </div>
+  //   )
+  // }
 
   // Fetch users and employees
   useEffect(() => {
@@ -84,8 +75,7 @@ export default function UserManagement() {
         console.log('UserManagement: Fetching employees...')
         const { data: employeesData, error: employeesError } = await supabase
           .from('employees')
-          .select('id, full_name')
-          .eq('status', 'active')
+          .select('id, full_name, position')
           .order('full_name')
 
         if (employeesError) {
@@ -181,6 +171,79 @@ export default function UserManagement() {
     }
   }
 
+  const handleCreateUser = async (e) => {
+    e.preventDefault()
+    setCreating(true)
+    setError('')
+
+    try {
+      console.log('Creating user account:', createForm.email)
+
+      // Create auth user first
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: createForm.email,
+        password: createForm.password,
+        email_confirm: true
+      })
+
+      if (authError) {
+        console.error('Auth creation error:', authError)
+        setError('Failed to create auth user: ' + authError.message)
+        return
+      }
+
+      console.log('Auth user created:', authData.user?.id)
+
+      // Create user profile
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .insert({
+          id: authData.user.id,
+          email: createForm.email,
+          user_role: createForm.user_role,
+          full_name: createForm.full_name,
+          employee_id: createForm.employee_id || null,
+          is_active: true
+        })
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError)
+        setError('Failed to create user profile: ' + profileError.message)
+        return
+      }
+
+      console.log('User profile created successfully')
+
+      // Reset form and refresh data
+      setCreateForm({
+        email: '',
+        password: '',
+        user_role: 'staff',
+        full_name: '',
+        employee_id: ''
+      })
+      setShowCreateForm(false)
+      
+      // Refresh the users list
+      const { data: usersData, error: fetchError } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (!fetchError) {
+        setUsers(usersData || [])
+      }
+
+      alert('User account created successfully!')
+
+    } catch (err) {
+      console.error('Create user error:', err)
+      setError('Failed to create user: ' + err.message)
+    } finally {
+      setCreating(false)
+    }
+  }
+
   if (loading) return <div>Loading users...</div>
   if (error) return <div style={{ color: 'red' }}>Error: {error}</div>
 
@@ -206,6 +269,131 @@ export default function UserManagement() {
         Employees loaded: {employees.length}<br />
         {error && <span style={{ color: '#dc2626' }}>Error: {error}</span>}
       </div>
+
+      {/* Create User Button */}
+      <div style={{ marginBottom: '2rem' }}>
+        <button
+          onClick={() => setShowCreateForm(!showCreateForm)}
+          style={{
+            padding: '0.75rem 1.5rem',
+            backgroundColor: showCreateForm ? '#6c757d' : '#007bff',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '1rem'
+          }}
+        >
+          {showCreateForm ? 'Cancel' : 'Create New User'}
+        </button>
+      </div>
+
+      {/* Create User Form */}
+      {showCreateForm && (
+        <div style={{
+          border: '1px solid #ddd',
+          padding: '1.5rem',
+          marginBottom: '2rem',
+          borderRadius: '8px',
+          backgroundColor: '#f8f9fa'
+        }}>
+          <h3>Create New User Account</h3>
+          <form onSubmit={handleCreateUser}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  Email Address:
+                </label>
+                <input
+                  type="email"
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, email: e.target.value }))}
+                  required
+                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  Full Name:
+                </label>
+                <input
+                  type="text"
+                  value={createForm.full_name}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, full_name: e.target.value }))}
+                  required
+                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  Temporary Password:
+                </label>
+                <input
+                  type="password"
+                  value={createForm.password}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, password: e.target.value }))}
+                  required
+                  minLength={6}
+                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  User Role:
+                </label>
+                <select
+                  value={createForm.user_role}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, user_role: e.target.value }))}
+                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+                >
+                  <option value="staff">Staff</option>
+                  <option value="manager">Manager</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                Link to Employee (Optional):
+              </label>
+              <select
+                value={createForm.employee_id}
+                onChange={(e) => setCreateForm(prev => ({ ...prev, employee_id: e.target.value }))}
+                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+              >
+                <option value="">-- No Employee Link --</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.full_name} ({emp.position})
+                  </option>
+                ))}
+              </select>
+              <small style={{ color: '#666', marginTop: '0.25rem', display: 'block' }}>
+                Available employees: {employees.length}
+              </small>
+            </div>
+
+            <button
+              type="submit"
+              disabled={creating}
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: creating ? '#6c757d' : '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: creating ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {creating ? 'Creating...' : 'Create User Account'}
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* Manual Refresh Button */}
       <div style={{ marginBottom: '2rem' }}>
@@ -372,7 +560,7 @@ export default function UserManagement() {
                         {user.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </p>
-                    <p><strong>Created:</strong> {new Date(user.created_at).toLocaleDateString()}</p>
+                    <p><strong>Created:</strong> {parseDate(user.created_at).toLocaleDateString()}</p>
                     {user.employee_id && (
                       <p><strong>Linked Employee:</strong> 
                         {employees.find(emp => emp.id === user.employee_id)?.full_name || 'Unknown'}

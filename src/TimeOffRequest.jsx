@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
+import { parseDate } from './dateUtils';
 
 export default function TimeOffRequest() {
   const [employees, setEmployees] = useState([]);
@@ -19,6 +20,8 @@ export default function TimeOffRequest() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [warningMessage, setWarningMessage] = useState('');
+
+  // parseDate function is now imported from dateUtils.js
 
   useEffect(() => {
     fetchEmployees();
@@ -91,11 +94,11 @@ export default function TimeOffRequest() {
       return 'Please specify when the recurring pattern should end.';
     }
 
-    if (!formData.is_recurring && new Date(formData.end_date) < new Date(formData.start_date)) {
+    if (!formData.is_recurring && parseDate(formData.end_date) < parseDate(formData.start_date)) {
       return 'End date cannot be before start date.';
     }
 
-    if (formData.is_recurring && new Date(formData.recurrence_end_date) < new Date(formData.start_date)) {
+    if (formData.is_recurring && parseDate(formData.recurrence_end_date) < parseDate(formData.start_date)) {
       return 'Recurrence end date cannot be before start date.';
     }
 
@@ -121,7 +124,7 @@ export default function TimeOffRequest() {
     }
 
     const today = new Date();
-    const startDate = new Date(formData.start_date);
+    const startDate = parseDate(formData.start_date);
     const fourWeeksFromNow = new Date();
     fourWeeksFromNow.setDate(today.getDate() + 28);
     

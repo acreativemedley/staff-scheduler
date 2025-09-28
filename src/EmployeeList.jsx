@@ -14,20 +14,27 @@ function EmployeeList() {
 
   async function fetchEmployees() {
     try {
+      console.log('EmployeeList: Starting fetchEmployees...')
       setLoading(true)
       const { data, error } = await supabase
         .from('employees')
         .select('*')
         .order('full_name')
 
+      console.log('EmployeeList: Fetch result:', { data, error, count: data?.length })
+
       if (error) {
+        console.error('EmployeeList: Error fetching employees:', error)
         setError(error.message)
       } else {
+        console.log('EmployeeList: Setting employees data:', data)
         setEmployees(data)
       }
     } catch (err) {
+      console.error('EmployeeList: Catch error:', err)
       setError('Failed to fetch employees')
     } finally {
+      console.log('EmployeeList: Setting loading to false')
       setLoading(false)
     }
   }
@@ -203,12 +210,21 @@ function EmployeeList() {
     }
   }
 
-  if (loading) return <div>Loading employees...</div>
-  if (error) return <div>Error: {error}</div>
+  if (loading) {
+    console.log('EmployeeList: Rendering loading state')
+    return <div>Loading employees...</div>
+  }
+  if (error) {
+    console.log('EmployeeList: Rendering error state:', error)
+    return <div>Error: {error}</div>
+  }
+
+  console.log('EmployeeList: Rendering employees, count:', employees.length)
 
   return (
     <div>
       <h2>Staff Directory</h2>
+      {employees.length === 0 && <p>No employees found.</p>}
       <div style={{ display: 'grid', gap: '1rem', marginTop: '1rem' }}>
         {employees.map((employee) => (
           <div 

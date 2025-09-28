@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
+import { parseDate, formatDateDisplay, formatTimeDisplay, getDateRange, getDaysCount } from './dateUtils';
 
 export default function TimeOffManager() {
   const [requests, setRequests] = useState([]);
@@ -212,41 +213,13 @@ export default function TimeOffManager() {
     }));
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
+  // Use centralized date utilities instead of local functions
+  const formatDate = formatDateDisplay;
+  const formatTime = formatTimeDisplay;
 
-  const formatTime = (timeString) => {
-    if (!timeString) return '';
-    return new Date(`1970-01-01T${timeString}`).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  };
-
-  const getDateRange = (startDate, endDate) => {
-    const start = formatDate(startDate);
-    const end = formatDate(endDate);
-    
-    if (startDate === endDate) {
-      return start;
-    }
-    return `${start} - ${end}`;
-  };
-
-  const getDaysCount = (startDate, endDate) => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const diffTime = Math.abs(end - start);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    return diffDays;
-  };
+  // Remove duplicate functions - using imported utilities
+  // getDateRange and getDaysCount are imported from dateUtils.js
+  // parseDate is imported from dateUtils.js
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -264,11 +237,11 @@ export default function TimeOffManager() {
   });
 
   const upcomingRequests = filteredRequests.filter(request => 
-    new Date(request.start_date) >= new Date()
+    parseDate(request.start_date) >= new Date()
   );
   
   const pastRequests = filteredRequests.filter(request => 
-    new Date(request.end_date) < new Date()
+    parseDate(request.end_date) < new Date()
   );
 
   if (loading) {
