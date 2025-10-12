@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabase';
 import { parseDate, formatDateForInput, formatDateDisplay, getWeekDates, isDateInRange, isSameDay } from './dateUtils';
+import { extractTimeOnly, normalizeTime } from './timeUtils';
+import { useUser } from './UserContext-Minimal';
 
 export default function ScheduleGenerator() {
+  const { canEdit, userProfile } = useUser();
   const [employees, setEmployees] = useState([]);
   const [scheduleTemplates, setScheduleTemplates] = useState([]);
   const [timeOffRequests, setTimeOffRequests] = useState([]);
@@ -113,6 +116,13 @@ export default function ScheduleGenerator() {
       console.error('ScheduleGenerator: Error fetching templates:', error);
     } else {
       console.log('ScheduleGenerator: Setting templates:', data?.length || 0, 'templates')
+      // Log each template's time values to check for timezone issues
+      if (data && data.length > 0) {
+        console.log('🕒 TEMPLATE TIME CHECK:');
+        data.forEach(t => {
+          console.log(`  Day ${t.day_of_week}: open=${t.store_open_time} (${typeof t.store_open_time}), close=${t.store_close_time} (${typeof t.store_close_time})`);
+        });
+      }
       setScheduleTemplates(data || []);
     }
   };
@@ -130,70 +140,120 @@ export default function ScheduleGenerator() {
     }
   };
 
+  /**
+   * Fetch Google Calendar events via CORS proxy
+   * 
+   * TROUBLESHOOTING:
+   * - If you see 408 timeout errors, the CORS proxy may be slow/down
+   * - This function tries multiple proxies in fallback order
+   * - See network-troubleshooting.md for full documentation
+   * 
+   * CORS PROXY CHAIN (tries in order):
+   * 1. corsproxy.io - Fast and reliable
+   * 2. api.allorigins.win - Good backup
+   * 3. cors-anywhere.herokuapp.com - Last resort
+   * 
+   * TO ADD MORE PROXIES:
+   * Add to the proxies array with format:
+   * { name: 'proxy-name', url: 'proxy-url', direct: true/false }
+   * - direct: true if proxy returns iCal directly
+   * - direct: false if proxy wraps response in JSON with 'contents' field
+   */
   const fetchGoogleCalendarEvents = async (startDate, endDate) => {
     try {
-      console.log('Fetching Google Calendar events from public iCal feed for:', startDate, 'to', endDate);
-      
-      // Use CORS proxy with the iCal feed
-      console.log('Trying iCal feed with CORS proxy...');
+      console.log('🔍 CALENDAR FETCH: Starting fetch for date range:', startDate, 'to', endDate);
       
       const icalUrl = `https://calendar.google.com/calendar/ical/${encodeURIComponent(GOOGLE_CALENDAR_ID)}/public/basic.ics`;
-      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(icalUrl)}`;
+      console.log('🔍 CALENDAR FETCH: Calendar ID:', GOOGLE_CALENDAR_ID);
+      console.log('🔍 CALENDAR FETCH: iCal URL:', icalUrl);
       
-      console.log('Proxy URL:', proxyUrl);
-
-      const proxyResponse = await fetch(proxyUrl);
+      // Try multiple CORS proxies in order
+      const proxies = [
+        { name: 'corsproxy.io', url: `https://corsproxy.io/?${encodeURIComponent(icalUrl)}`, direct: true },
+        { name: 'api.allorigins.win', url: `https://api.allorigins.win/get?url=${encodeURIComponent(icalUrl)}`, direct: false },
+        { name: 'cors-anywhere (backup)', url: `https://cors-anywhere.herokuapp.com/${icalUrl}`, direct: true }
+      ];
       
-      if (proxyResponse.ok) {
-        const proxyData = await proxyResponse.json();
-        console.log('Proxy response status:', proxyData.status);
-        
-        if (proxyData.contents) {
-          console.log('iCal data received, length:', proxyData.contents.length);
+      for (const proxy of proxies) {
+        try {
+          console.log(`🔍 CALENDAR FETCH: Trying ${proxy.name}...`);
+          console.log(`🔍 CALENDAR FETCH: Proxy URL:`, proxy.url);
           
-          let icalData = proxyData.contents;
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+          
+          const proxyResponse = await fetch(proxy.url, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          
+          console.log(`🔍 CALENDAR FETCH: ${proxy.name} response status:`, proxyResponse.status, proxyResponse.statusText);
+          
+          if (!proxyResponse.ok) {
+            throw new Error(`${proxy.name} request failed with status ${proxyResponse.status}`);
+          }
+          
+          let icalData;
+          
+          if (proxy.direct) {
+            // Direct response - text is the iCal data
+            icalData = await proxyResponse.text();
+            console.log(`🔍 CALENDAR FETCH: ${proxy.name} returned direct iCal data, length:`, icalData.length);
+          } else {
+            // Wrapped response - need to extract contents
+            const proxyData = await proxyResponse.json();
+            console.log(`🔍 CALENDAR FETCH: ${proxy.name} data keys:`, Object.keys(proxyData));
+            
+            if (!proxyData.contents) {
+              throw new Error(`No contents in ${proxy.name} response`);
+            }
+            
+            icalData = proxyData.contents;
+            console.log(`🔍 CALENDAR FETCH: ${proxy.name} iCal data length:`, icalData.length);
+          }
+          
+          console.log('🔍 CALENDAR FETCH: First 500 characters:', icalData.substring(0, 500));
           
           // Check if the data is base64 encoded
           if (icalData.startsWith('data:text/calendar') && icalData.includes('base64,')) {
-            console.log('Detected base64 encoded data, decoding...');
+            console.log('🔍 CALENDAR FETCH: Detected base64 encoded data, decoding...');
             const base64Data = icalData.split('base64,')[1];
-            try {
-              icalData = atob(base64Data);
-              console.log('Successfully decoded base64 data, new length:', icalData.length);
-            } catch (decodeError) {
-              console.error('Failed to decode base64 data:', decodeError);
-              throw decodeError;
-            }
+            icalData = atob(base64Data);
+            console.log('🔍 CALENDAR FETCH: Successfully decoded base64 data, new length:', icalData.length);
           }
           
           const events = parseSimpleICS(icalData, startDate, endDate);
-          console.log('Parsed iCal events:', events);
+          console.log('🔍 CALENDAR FETCH: Parsed iCal events:', events);
+          console.log('🔍 CALENDAR FETCH: Number of event dates:', Object.keys(events).length);
+          
+          if (Object.keys(events).length === 0) {
+            console.warn(`⚠️ CALENDAR FETCH: No events found in date range using ${proxy.name}. Calendar might be empty.`);
+          }
+          
           setCalendarEvents(events);
-          return;
+          console.log(`✅ CALENDAR FETCH: Successfully loaded events using ${proxy.name}`);
+          return; // Success! Exit function
+          
+        } catch (proxyError) {
+          console.warn(`⚠️ CALENDAR FETCH: ${proxy.name} failed:`, proxyError.message);
+          // Continue to next proxy
         }
       }
-
-      throw new Error('All methods failed');
+      
+      // All proxies failed
+      throw new Error('All CORS proxy methods failed');
 
     } catch (error) {
-      console.error('All Google Calendar methods failed:', error);
-      console.log('Using fallback mock data...');
+      console.error('❌ CALENDAR FETCH ERROR: All methods failed to fetch calendar events');
+      console.error('❌ Error type:', error.constructor.name);
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Full error:', error);
+      console.log('⚠️ CALENDAR FETCH: Using empty calendar (no mock data)...');
       
-      // Fallback to mock data
-      const weekStart = new Date(startDate);
-      const mockEvents = {
-        [formatDateForInput(weekStart)]: [
-          {
-            id: 'mock1',
-            title: 'Store Manager Meeting (Mock)',
-            isAllDay: false,
-            startTime: weekStart.toISOString().split('T')[0] + 'T10:00:00',
-            endTime: weekStart.toISOString().split('T')[0] + 'T11:00:00'
-          }
-        ]
-      };
-
-      setCalendarEvents(mockEvents);
+      // Set empty calendar events instead of mock data
+      setCalendarEvents({});
+      console.warn('⚠️ Unable to load Google Calendar events. Please check:\n' +
+        '1. Calendar is set to public\n' +
+        '2. Calendar ID is correct\n' +
+        '3. Internet connection is working');
     }
   };
 
@@ -390,6 +450,22 @@ export default function ScheduleGenerator() {
     return result;
   };
 
+  // Check if employee has FULL DAY time off (not partial)
+  const isEmployeeOnFullDayTimeOff = (employeeId, date) => {
+    const dateStr = date instanceof Date ? formatDateForInput(date) : date;
+    
+    return timeOffRequests.some(request => {
+      if (request.employee_id !== employeeId) return false;
+      if (request.request_type !== 'full_days') return false;
+      
+      const startDate = parseDate(request.start_date);
+      const endDate = parseDate(request.end_date);
+      const checkDate = parseDate(dateStr);
+      
+      return isDateInRange(checkDate, startDate, endDate);
+    });
+  };
+
   const getPartialTimeOff = (employeeId, date) => {
     // Handle both Date objects and date strings
     const dateStr = date instanceof Date ? formatDateForInput(date) : date;
@@ -518,7 +594,7 @@ export default function ScheduleGenerator() {
         console.log(`Found employee for ${entry.employee_id}:`, employee?.full_name);
         
         if (employee) {
-          const hasTimeOff = isEmployeeOnTimeOff(employee.id, dateKey);
+          const hasFullDayTimeOff = isEmployeeOnFullDayTimeOff(employee.id, dateKey);
           const partialTimeOff = getPartialTimeOff(employee.id, dateKey);
           
           schedule[dateKey].shifts.push({
@@ -527,7 +603,7 @@ export default function ScheduleGenerator() {
             start_time: entry.start_time,
             end_time: entry.end_time,
             position: entry.job_position || entry.position || entry.employee_position,
-            conflict: hasTimeOff,
+            conflict: hasFullDayTimeOff,
             partialTimeOff: partialTimeOff,
             notes: entry.notes || '',
             isFromBase: entry.is_from_base,
@@ -568,7 +644,7 @@ export default function ScheduleGenerator() {
         const employee = employees.find(emp => emp.id === entry.employee_id);
         
         if (employee) {
-          const hasTimeOff = isEmployeeOnTimeOff(employee.id, dateKey);
+          const hasFullDayTimeOff = isEmployeeOnFullDayTimeOff(employee.id, dateKey);
           const partialTimeOff = getPartialTimeOff(employee.id, dateKey);
           
           schedule[dateKey].shifts.push({
@@ -577,7 +653,7 @@ export default function ScheduleGenerator() {
             start_time: entry.start_time,
             end_time: entry.end_time,
             position: entry.employee_position,
-            conflict: hasTimeOff,
+            conflict: hasFullDayTimeOff,
             partialTimeOff: partialTimeOff,
             notes: entry.notes
           });
@@ -654,19 +730,23 @@ export default function ScheduleGenerator() {
     const managers = employees.filter(emp => emp.role === 'manager');
     const staff = employees.filter(emp => emp.role === 'staff' || emp.role === 'tech');
 
+    // Normalize template times to handle timezone issues
+    const openTime = normalizeTime(template.store_open_time, '09:00');
+    const closeTime = normalizeTime(template.store_close_time, '17:00');
+
     // Add managers
     for (let i = 0; i < template.required_managers && i < managers.length; i++) {
       const employee = managers[i];
-      const hasTimeOff = isEmployeeOnTimeOff(employee.id, date);
+      const hasFullDayTimeOff = isEmployeeOnFullDayTimeOff(employee.id, date);
       const partialTimeOff = getPartialTimeOff(employee.id, date);
       
       shifts.push({
         id: `${employee.id}-${formatDateForInput(date)}`,
         employee: employee,
-        start_time: template.store_open_time,
-        end_time: template.store_close_time,
+        start_time: openTime,
+        end_time: closeTime,
         position: employee.position,
-        conflict: hasTimeOff,
+        conflict: hasFullDayTimeOff,
         partialTimeOff: partialTimeOff
       });
     }
@@ -674,16 +754,16 @@ export default function ScheduleGenerator() {
     // Add staff
     for (let i = 0; i < template.required_staff && i < staff.length; i++) {
       const employee = staff[i];
-      const hasTimeOff = isEmployeeOnTimeOff(employee.id, date);
+      const hasFullDayTimeOff = isEmployeeOnFullDayTimeOff(employee.id, date);
       const partialTimeOff = getPartialTimeOff(employee.id, date);
       
       shifts.push({
         id: `${employee.id}-${formatDateForInput(date)}`,
         employee: employee,
-        start_time: template.store_open_time,
-        end_time: template.store_close_time,
+        start_time: openTime,
+        end_time: closeTime,
         position: employee.position,
-        conflict: hasTimeOff,
+        conflict: hasFullDayTimeOff,
         partialTimeOff: partialTimeOff
       });
     }
@@ -781,9 +861,21 @@ export default function ScheduleGenerator() {
     if (!daySchedule || !selectedEmployee) return;
 
     // Get template for this day of week, or use default times
+    console.log('🕒 Adding employee - Day of week:', daySchedule.dayOfWeek);
+    console.log('🕒 Available templates:', scheduleTemplates);
+    console.log('🕒 Looking for template with day_of_week:', daySchedule.dayOfWeek);
+    
     const template = scheduleTemplates.find(t => t.day_of_week === daySchedule.dayOfWeek);
-    const defaultStartTime = template?.store_open_time || '09:00';
-    const defaultEndTime = template?.store_close_time || '17:00';
+    console.log('🕒 Template found:', template);
+    console.log('🕒 Raw store_open_time:', template?.store_open_time, 'Type:', typeof template?.store_open_time);
+    console.log('🕒 Raw store_close_time:', template?.store_close_time, 'Type:', typeof template?.store_close_time);
+    
+    // Use normalizeTime to handle any timezone issues with TIME values from PostgreSQL
+    const defaultStartTime = normalizeTime(template?.store_open_time, '09:00');
+    const defaultEndTime = normalizeTime(template?.store_close_time, '17:00');
+    
+    console.log('🕒 Normalized start time:', defaultStartTime);
+    console.log('🕒 Normalized end time:', defaultEndTime);
 
     const newShift = {
       id: `${selectedEmployee.id}-${modalDateKey}`,
@@ -791,7 +883,7 @@ export default function ScheduleGenerator() {
       start_time: defaultStartTime,
       end_time: defaultEndTime,
       position: selectedEmployee.position,
-      conflict: isEmployeeOnTimeOff(selectedEmployee.id, daySchedule.date),
+      conflict: isEmployeeOnFullDayTimeOff(selectedEmployee.id, daySchedule.date),
       partialTimeOff: getPartialTimeOff(selectedEmployee.id, daySchedule.date),
       isFromBase: false, // This is a manually added shift
       notes: ''
@@ -1448,28 +1540,30 @@ export default function ScheduleGenerator() {
       )}
 
       {/* Save Schedule Button */}
-      <div style={{ 
-        textAlign: 'center', 
-        marginBottom: '20px' 
-      }}>
-        <button
-          onClick={saveWeeklySchedule}
-          disabled={saving}
-          style={{
-            padding: '12px 24px',
-            backgroundColor: saving ? '#9ca3af' : '#16a34a',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: saving ? 'not-allowed' : 'pointer',
-            fontSize: '16px',
-            fontWeight: 'bold',
-            minWidth: '150px'
-          }}
-        >
-          {saving ? 'Saving...' : 'Save Schedule'}
-        </button>
-      </div>
+      {canEdit() && (
+        <div style={{ 
+          textAlign: 'center', 
+          marginBottom: '20px' 
+        }}>
+          <button
+            onClick={saveWeeklySchedule}
+            disabled={saving}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: saving ? '#9ca3af' : '#16a34a',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: saving ? 'not-allowed' : 'pointer',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              minWidth: '150px'
+            }}
+          >
+            {saving ? 'Saving...' : 'Save Schedule'}
+          </button>
+        </div>
+      )}
 
       {/* Message */}
       {message && (
@@ -1543,25 +1637,29 @@ export default function ScheduleGenerator() {
                             onRemove={removeShift}
                             formatTime={formatTime}
                             employees={employees}
+                            canEdit={canEdit()}
+                            currentUserEmployeeId={userProfile?.employee_id}
                           />
                         ))}
                         
-                        <button
-                          onClick={() => addShift(dateKey)}
-                          style={{
-                            width: '100%',
-                            padding: '8px',
-                            marginTop: '10px',
-                            backgroundColor: '#f3f4f6',
-                            border: '1px dashed #9ca3af',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '14px',
-                            color: '#6b7280'
-                          }}
-                        >
-                          + Add Employee
-                        </button>
+                        {canEdit() && (
+                          <button
+                            onClick={() => addShift(dateKey)}
+                            style={{
+                              width: '100%',
+                              padding: '8px',
+                              marginTop: '10px',
+                              backgroundColor: '#f3f4f6',
+                              border: '1px dashed #9ca3af',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              color: '#6b7280'
+                            }}
+                          >
+                            + Add Employee
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <div style={{ 
@@ -2126,13 +2224,15 @@ function MonthView({
   );
 }
 
-function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees }) {
+function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees, canEdit, currentUserEmployeeId }) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempValues, setTempValues] = useState({
     employee_id: shift.employee.id,
     start_time: shift.start_time,
     end_time: shift.end_time
   });
+
+  const isCurrentUser = currentUserEmployeeId && shift.employee.id === currentUserEmployeeId;
 
   const getShiftBackgroundColor = () => {
     if (shift.conflict) return '#fef2f2'; // Red for full day conflicts
@@ -2143,11 +2243,19 @@ function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees }
   };
 
   const getBorderColor = () => {
+    // If this is the current user's shift, use a bold primary color
+    if (isCurrentUser) return '#2563eb';
+    
     if (shift.conflict) return '#fecaca';
     if (shift.partialTimeOff) return '#fed7aa';
     if (shift.employee.role === 'manager') return '#bae6fd';
     if (shift.employee.role === 'tech') return '#e9d5ff'; // Purple border for tech
     return '#bbf7d0';
+  };
+  
+  const getBorderWidth = () => {
+    // Current user's shifts get a thicker border
+    return isCurrentUser ? '6px' : '1px';
   };
 
   const handleSave = () => {
@@ -2171,7 +2279,7 @@ function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees }
     <div
       style={{
         backgroundColor: getShiftBackgroundColor(),
-        border: `1px solid ${getBorderColor()}`,
+        border: `${getBorderWidth()} solid ${getBorderColor()}`,
         borderRadius: '6px',
         padding: '10px',
         marginBottom: '8px',
@@ -2281,38 +2389,40 @@ function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees }
             </div>
           )}
           
-          <div style={{ display: 'flex', gap: '5px' }}>
-            <button
-              onClick={() => setIsEditing(true)}
-              style={{
-                flex: 1,
-                padding: '4px 8px',
-                backgroundColor: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '3px',
-                cursor: 'pointer',
-                fontSize: '11px'
-              }}
-            >
-              Edit
-            </button>
-            <button
-              onClick={() => onRemove(dateKey, shift.id)}
-              style={{
-                flex: 1,
-                padding: '4px 8px',
-                backgroundColor: '#dc2626',
-                color: 'white',
-                border: 'none',
-                borderRadius: '3px',
-                cursor: 'pointer',
-                fontSize: '11px'
-              }}
-            >
-              Remove
-            </button>
-          </div>
+          {canEdit && (
+            <div style={{ display: 'flex', gap: '5px' }}>
+              <button
+                onClick={() => setIsEditing(true)}
+                style={{
+                  flex: 1,
+                  padding: '4px 8px',
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => onRemove(dateKey, shift.id)}
+                style={{
+                  flex: 1,
+                  padding: '4px 8px',
+                  backgroundColor: '#dc2626',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

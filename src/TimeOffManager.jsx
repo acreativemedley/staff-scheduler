@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { parseDate, formatDateDisplay, formatTimeDisplay, getDateRange, getDaysCount } from './dateUtils';
+import { useUser } from './UserContext-Minimal';
 
 export default function TimeOffManager() {
+  const { userProfile, canManageEmployees } = useUser();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState('all');
   const [filterEmployee, setFilterEmployee] = useState('all');
   const [employees, setEmployees] = useState([]);
   const [editingRequest, setEditingRequest] = useState(null);
@@ -33,11 +34,27 @@ export default function TimeOffManager() {
     setLoading(true);
     
     try {
-      // First, get the requests
-      const { data: requestsData, error: requestsError } = await supabase
+      console.log('TimeOffManager: Fetching requests...');
+      console.log('TimeOffManager: canManageEmployees:', canManageEmployees());
+      console.log('TimeOffManager: userProfile:', userProfile);
+      console.log('TimeOffManager: employee_id:', userProfile?.employee_id);
+      
+      // Build query - if staff, only fetch their own requests
+      let query = supabase
         .from('time_off_requests')
-        .select('*')
+        .select('*');
+      
+      // If user is staff (not manager/admin), filter by their employee_id
+      if (!canManageEmployees() && userProfile?.employee_id) {
+        console.log('TimeOffManager: Filtering by employee_id:', userProfile.employee_id);
+        query = query.eq('employee_id', userProfile.employee_id);
+      }
+      
+      const { data: requestsData, error: requestsError } = await query
         .order('submitted_at', { ascending: false });
+      
+      console.log('TimeOffManager: Requests data:', requestsData);
+      console.log('TimeOffManager: Requests error:', requestsError);
       
       if (requestsError) {
         console.error('Error fetching requests:', requestsError);
@@ -231,7 +248,6 @@ export default function TimeOffManager() {
   };
 
   const filteredRequests = requests.filter(request => {
-    if (filterStatus !== 'all' && request.status !== filterStatus) return false;
     if (filterEmployee !== 'all' && request.employee_id !== filterEmployee) return false;
     return true;
   });
@@ -254,100 +270,81 @@ export default function TimeOffManager() {
 
   return (
     <div style={{ padding: '20px' }}>
-      <h2>Time-Off Requests</h2>
+      <h2>{canManageEmployees() ? 'Manage Time-Off Requests' : 'My Time-Off Requests'}</h2>
       <p style={{ marginBottom: '20px', color: '#6b7280' }}>
-        View and manage all time-off requests. Requests are automatically approved.
+        {canManageEmployees() 
+          ? 'View and manage all time-off requests. Requests are automatically approved.'
+          : 'View and manage your own time-off requests. You can edit or delete your requests here.'
+        }
       </p>
 
       {/* Filters */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '15px',
-        marginBottom: '30px',
-        padding: '15px',
-        backgroundColor: '#f9fafb',
-        borderRadius: '8px'
-      }}>
-        <div>
-          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>
-            Filter by Status:
-          </label>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '8px',
-              fontSize: '14px',
-              border: '1px solid #d1d5db',
-              borderRadius: '4px'
-            }}
-          >
-            <option value="all">All Statuses</option>
-            <option value="approved">Approved</option>
-            <option value="pending">Pending</option>
-            <option value="denied">Denied</option>
-          </select>
+      {canManageEmployees() && (
+        <div style={{
+          display: 'flex',
+          gap: '15px',
+          marginBottom: '30px',
+          padding: '15px',
+          backgroundColor: '#f9fafb',
+          borderRadius: '8px',
+          alignItems: 'end'
+        }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>
+              Filter by Employee:
+            </label>
+            <select
+              value={filterEmployee}
+              onChange={(e) => setFilterEmployee(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px',
+                fontSize: '14px',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px'
+              }}
+            >
+              <option value="all">All Employees</option>
+              {employees.map(employee => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.display_name || employee.full_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <button
+              onClick={() => setFilterEmployee('all')}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#6b7280',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                marginRight: '10px'
+              }}
+            >
+              Clear Filter
+            </button>
+            <button
+              onClick={fetchTimeOffRequests}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              🔄 Refresh
+            </button>
+          </div>
         </div>
-        <div>
-          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>
-            Filter by Employee:
-          </label>
-          <select
-            value={filterEmployee}
-            onChange={(e) => setFilterEmployee(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '8px',
-              fontSize: '14px',
-              border: '1px solid #d1d5db',
-              borderRadius: '4px'
-            }}
-          >
-            <option value="all">All Employees</option>
-            {employees.map(employee => (
-              <option key={employee.id} value={employee.id}>
-                {employee.display_name || employee.full_name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'end' }}>
-          <button
-            onClick={() => {
-              setFilterStatus('all');
-              setFilterEmployee('all');
-            }}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#6b7280',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              marginRight: '10px'
-            }}
-          >
-            Clear Filters
-          </button>
-          <button
-            onClick={fetchTimeOffRequests}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            🔄 Refresh
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Summary Stats */}
       <div style={{
@@ -363,20 +360,9 @@ export default function TimeOffManager() {
           textAlign: 'center'
         }}>
           <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#16a34a' }}>
-            {filteredRequests.filter(r => r.status === 'approved').length}
+            {filteredRequests.length}
           </div>
-          <div style={{ fontSize: '14px', color: '#15803d' }}>Approved</div>
-        </div>
-        <div style={{
-          padding: '15px',
-          backgroundColor: '#fffbeb',
-          borderRadius: '8px',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#d97706' }}>
-            {filteredRequests.filter(r => r.status === 'pending').length}
-          </div>
-          <div style={{ fontSize: '14px', color: '#b45309' }}>Pending</div>
+          <div style={{ fontSize: '14px', color: '#15803d' }}>Total Requests</div>
         </div>
         <div style={{
           padding: '15px',
@@ -388,6 +374,17 @@ export default function TimeOffManager() {
             {upcomingRequests.length}
           </div>
           <div style={{ fontSize: '14px', color: '#0369a1' }}>Upcoming</div>
+        </div>
+        <div style={{
+          padding: '15px',
+          backgroundColor: '#fef3c7',
+          borderRadius: '8px',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#92400e' }}>
+            {pastRequests.length}
+          </div>
+          <div style={{ fontSize: '14px', color: '#78350f' }}>Past</div>
         </div>
       </div>
 
@@ -401,7 +398,17 @@ export default function TimeOffManager() {
         }}>
           <div style={{ fontSize: '48px', marginBottom: '10px' }}>📅</div>
           <div style={{ fontSize: '18px', marginBottom: '5px' }}>No time-off requests found</div>
-          <div style={{ fontSize: '14px' }}>Requests will appear here once submitted</div>
+          <div style={{ fontSize: '14px' }}>
+            {!canManageEmployees() && !userProfile?.employee_id 
+              ? 'Your account is not linked to an employee. Please contact an administrator.'
+              : 'Requests will appear here once submitted'
+            }
+          </div>
+          {!canManageEmployees() && (
+            <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '10px' }}>
+              Debug: Employee ID = {userProfile?.employee_id || 'Not set'}
+            </div>
+          )}
         </div>
       ) : (
         <div>

@@ -20,7 +20,7 @@ function AppContent() {
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [refreshEmployees, setRefreshEmployees] = useState(0)
-  const [activeTab, setActiveTab] = useState('employees')
+  const [activeTab, setActiveTab] = useState('availability-overview')
 
   useEffect(() => {
     // Wait for user context to load
@@ -60,20 +60,30 @@ function AppContent() {
 
   // Define navigation tabs based on user permissions
   const getNavigationTabs = () => {
+    const userRole = effectiveUserProfile?.user_role || 'staff'
+    
+    // Base tabs for all users (Staff, Manager, Admin, Owner)
     const baseTabs = [
-      { key: 'employees', label: 'Employees', icon: '👥' },
-      { key: 'availability-overview', label: 'Team Availability', icon: '📅' },
-      { key: 'availability-manager', label: 'Set Availability', icon: '⚙️' },
+      { key: 'availability-manager', label: 'My Availability', icon: '⚙️' },
       { key: 'time-off-request', label: 'Request Time Off', icon: '🏖️' },
-      { key: 'schedule-generator', label: 'Weekly Schedules', icon: '📊' }
+      { key: 'time-off-manager', label: 'Manage My Time-Off', icon: '📋' },
+      { key: 'schedule-generator', label: 'View Schedules', icon: '📊' }
     ]
 
-    // Add management tabs for managers and admins
+    // Add manager/admin tabs
     if (canManageEmployees()) {
-      baseTabs.splice(4, 0, 
-        { key: 'time-off-manager', label: 'Manage Time-Off', icon: '📋' },
+      baseTabs.unshift(
+        { key: 'employees', label: 'Employees', icon: '👥' },
+        { key: 'availability-overview', label: 'Team Availability', icon: '📅' }
+      )
+      baseTabs.push(
         { key: 'schedule-templates', label: 'Schedule Templates', icon: '🗓️' },
         { key: 'base-schedule-manager', label: 'Base Schedule', icon: '📝' }
+      )
+    } else {
+      // Staff can see team availability but read-only
+      baseTabs.unshift(
+        { key: 'availability-overview', label: 'Team Availability', icon: '📅' }
       )
     }
 
@@ -96,9 +106,11 @@ function AppContent() {
             fontSize: '0.875rem',
             backgroundColor: 
               effectiveUserProfile?.user_role === 'admin' ? '#dbeafe' : 
+              effectiveUserProfile?.user_role === 'owner' ? '#fce7f3' :
               effectiveUserProfile?.user_role === 'manager' ? '#fef3c7' : '#f0fdf4',
             color: 
               effectiveUserProfile?.user_role === 'admin' ? '#1e40af' : 
+              effectiveUserProfile?.user_role === 'owner' ? '#9f1239' :
               effectiveUserProfile?.user_role === 'manager' ? '#92400e' : '#166534'
           }}>
             {effectiveUserProfile?.user_role?.charAt(0).toUpperCase() + effectiveUserProfile?.user_role?.slice(1)}
@@ -189,7 +201,7 @@ function AppContent() {
 
       {activeTab === 'time-off-request' && <TimeOffRequest />}
 
-      {activeTab === 'time-off-manager' && canManageEmployees() && <TimeOffManager />}
+      {activeTab === 'time-off-manager' && <TimeOffManager />}
 
       {activeTab === 'schedule-templates' && canManageEmployees() && <ScheduleTemplates />}
 

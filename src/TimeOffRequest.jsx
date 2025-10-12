@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { parseDate } from './dateUtils';
+import { useUser } from './UserContext-Minimal';
 
 export default function TimeOffRequest() {
+  const { userProfile, canManageEmployees } = useUser();
   const [employees, setEmployees] = useState([]);
   const [formData, setFormData] = useState({
     employee_id: '',
@@ -37,6 +39,17 @@ export default function TimeOffRequest() {
       console.error('Error fetching employees:', error);
     } else {
       setEmployees(data || []);
+      
+      // If user is staff and has a linked employee_id, auto-select it
+      if (!canManageEmployees() && userProfile?.employee_id && data) {
+        const linkedEmployee = data.find(emp => emp.id === userProfile.employee_id);
+        if (linkedEmployee) {
+          setFormData(prev => ({
+            ...prev,
+            employee_id: linkedEmployee.id
+          }));
+        }
+      }
     }
   };
 
@@ -211,9 +224,13 @@ export default function TimeOffRequest() {
         setMessage('Time-off request submitted successfully!');
       }
       
-      // Reset form
+      // Reset form but preserve employee_id for staff users
+      const preservedEmployeeId = !canManageEmployees() && userProfile?.employee_id 
+        ? userProfile.employee_id 
+        : '';
+      
       setFormData({
-        employee_id: '',
+        employee_id: preservedEmployeeId,
         start_date: '',
         end_date: '',
         request_type: 'full_days',
@@ -256,24 +273,43 @@ export default function TimeOffRequest() {
           <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
             Employee: *
           </label>
-          <select
-            value={formData.employee_id}
-            onChange={(e) => handleInputChange('employee_id', e.target.value)}
-            style={{
+          {canManageEmployees() ? (
+            <select
+              value={formData.employee_id}
+              onChange={(e) => handleInputChange('employee_id', e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px',
+                fontSize: '16px',
+                border: '1px solid #d1d5db',
+                borderRadius: '5px'
+              }}
+            >
+              <option value="">Select employee...</option>
+              {employees.map(employee => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.display_name || employee.full_name} ({employee.position})
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div style={{
               width: '100%',
               padding: '10px',
               fontSize: '16px',
-              border: '1px solid #d1d5db',
-              borderRadius: '5px'
-            }}
-          >
-            <option value="">Select employee...</option>
-            {employees.map(employee => (
-              <option key={employee.id} value={employee.id}>
-                {employee.display_name || employee.full_name} ({employee.position})
-              </option>
-            ))}
-          </select>
+              border: '1px solid #e5e7eb',
+              borderRadius: '5px',
+              backgroundColor: '#f9fafb',
+              color: '#374151'
+            }}>
+              {employees.find(emp => emp.id === formData.employee_id)?.full_name || 'Not linked to an employee'}
+            </div>
+          )}
+          {!canManageEmployees() && !formData.employee_id && (
+            <p style={{ color: '#dc2626', fontSize: '14px', marginTop: '4px' }}>
+              Your account is not linked to an employee. Please contact an administrator.
+            </p>
+          )}
         </div>
 
         {/* Request Type */}

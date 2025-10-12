@@ -1,10 +1,17 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
+import { useUser } from './UserContext-Minimal';
 
 export default function AvailabilityManager() {
+  const { userProfile, canManageEmployees } = useUser();
   const [employees, setEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState('');
   const [availability, setAvailability] = useState({});
+  const [hoursPreferences, setHoursPreferences] = useState({
+    minimum_hours_per_week: '',
+    preferred_hours_per_week: '',
+    maximum_hours_per_week: ''
+  });
   const [loading, setLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
@@ -37,18 +44,28 @@ export default function AvailabilityManager() {
   const fetchEmployees = async () => {
     const { data, error } = await supabase
       .from('employees')
-      .select('id, full_name, display_name, position')
+      .select('id, full_name, display_name, position, minimum_hours_per_week, preferred_hours_per_week, maximum_hours_per_week')
       .order('full_name');
     
     if (error) {
       console.error('Error fetching employees:', error);
     } else {
       setEmployees(data || []);
+      
+      // If user is staff and has a linked employee_id, auto-select it
+      if (!canManageEmployees() && userProfile?.employee_id && data) {
+        const linkedEmployee = data.find(emp => emp.id === userProfile.employee_id);
+        if (linkedEmployee) {
+          setSelectedEmployee(linkedEmployee.id);
+        }
+      }
     }
   };
 
   const fetchEmployeeAvailability = async (employeeId) => {
     setLoading(true);
+    
+    // Fetch availability data
     const { data, error } = await supabase
       .from('employee_availability')
       .select('*')
@@ -69,6 +86,24 @@ export default function AvailabilityManager() {
       });
       setAvailability(availabilityObj);
     }
+    
+    // Fetch employee hours preferences
+    const { data: employeeData, error: empError } = await supabase
+      .from('employees')
+      .select('minimum_hours_per_week, preferred_hours_per_week, maximum_hours_per_week')
+      .eq('id', employeeId)
+      .single();
+    
+    if (empError) {
+      console.error('Error fetching employee hours:', empError);
+    } else if (employeeData) {
+      setHoursPreferences({
+        minimum_hours_per_week: employeeData.minimum_hours_per_week || '',
+        preferred_hours_per_week: employeeData.preferred_hours_per_week || '',
+        maximum_hours_per_week: employeeData.maximum_hours_per_week || ''
+      });
+    }
+    
     setLoading(false);
   };
 
@@ -117,6 +152,18 @@ export default function AvailabilityManager() {
 
         if (error) throw error;
       }
+      
+      // Update employee hours preferences
+      const { error: hoursError } = await supabase
+        .from('employees')
+        .update({
+          minimum_hours_per_week: hoursPreferences.minimum_hours_per_week || null,
+          preferred_hours_per_week: hoursPreferences.preferred_hours_per_week || null,
+          maximum_hours_per_week: hoursPreferences.maximum_hours_per_week || null
+        })
+        .eq('id', selectedEmployee);
+      
+      if (hoursError) throw hoursError;
 
       setSaveMessage('Availability saved successfully!');
       setTimeout(() => setSaveMessage(''), 3000);
@@ -142,30 +189,149 @@ export default function AvailabilityManager() {
       {/* Employee Selection */}
       <div style={{ marginBottom: '30px' }}>
         <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
-          Select Employee:
+          {canManageEmployees() ? 'Select Employee:' : 'Your Availability:'}
         </label>
-        <select
-          value={selectedEmployee}
-          onChange={(e) => setSelectedEmployee(e.target.value)}
-          style={{
+        {canManageEmployees() ? (
+          <select
+            value={selectedEmployee}
+            onChange={(e) => setSelectedEmployee(e.target.value)}
+            style={{
+              width: '300px',
+              padding: '10px',
+              fontSize: '16px',
+              border: '1px solid #d1d5db',
+              borderRadius: '5px'
+            }}
+          >
+            <option value="">Choose an employee...</option>
+            {employees.map(employee => (
+              <option key={employee.id} value={employee.id}>
+                {employee.display_name || employee.full_name} ({employee.position})
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div style={{
             width: '300px',
             padding: '10px',
             fontSize: '16px',
-            border: '1px solid #d1d5db',
-            borderRadius: '5px'
-          }}
-        >
-          <option value="">Choose an employee...</option>
-          {employees.map(employee => (
-            <option key={employee.id} value={employee.id}>
-              {employee.display_name || employee.full_name} ({employee.position})
-            </option>
-          ))}
-        </select>
+            border: '1px solid #e5e7eb',
+            borderRadius: '5px',
+            backgroundColor: '#f9fafb',
+            color: '#374151'
+          }}>
+            {employees.find(emp => emp.id === selectedEmployee)?.full_name || 'Not linked to an employee'}
+          </div>
+        )}
+        {!canManageEmployees() && !selectedEmployee && (
+          <p style={{ color: '#dc2626', fontSize: '14px', marginTop: '8px' }}>
+            Your account is not linked to an employee. Please contact an administrator.
+          </p>
+        )}
       </div>
 
       {selectedEmployee && (
         <div>
+          {/* Hours Preferences Section */}
+          <div style={{
+            marginBottom: '30px',
+            padding: '20px',
+            border: '2px solid #3b82f6',
+            borderRadius: '8px',
+            backgroundColor: '#eff6ff'
+          }}>
+            <h3 style={{ marginTop: 0, color: '#1e40af' }}>Weekly Hours Preferences</h3>
+            <p style={{ fontSize: '14px', color: '#4b5563', marginBottom: '15px' }}>
+              Set your preferred working hours per week. This helps managers create schedules that match your availability.
+            </p>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#374151' }}>
+                  Minimum Hours/Week:
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="80"
+                  value={hoursPreferences.minimum_hours_per_week}
+                  onChange={(e) => setHoursPreferences(prev => ({
+                    ...prev,
+                    minimum_hours_per_week: e.target.value
+                  }))}
+                  placeholder="e.g., 15"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    fontSize: '16px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '5px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '5px', marginBottom: 0 }}>
+                  Minimum hours you prefer
+                </p>
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#374151' }}>
+                  Ideal Hours/Week:
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="80"
+                  value={hoursPreferences.preferred_hours_per_week}
+                  onChange={(e) => setHoursPreferences(prev => ({
+                    ...prev,
+                    preferred_hours_per_week: e.target.value
+                  }))}
+                  placeholder="e.g., 30"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    fontSize: '16px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '5px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '5px', marginBottom: 0 }}>
+                  Your ideal hours
+                </p>
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#374151' }}>
+                  Maximum Hours/Week:
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="80"
+                  value={hoursPreferences.maximum_hours_per_week}
+                  onChange={(e) => setHoursPreferences(prev => ({
+                    ...prev,
+                    maximum_hours_per_week: e.target.value
+                  }))}
+                  placeholder="e.g., 40"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    fontSize: '16px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '5px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '5px', marginBottom: 0 }}>
+                  Maximum hours you prefer
+                </p>
+              </div>
+            </div>
+          </div>
+          
           <h3>Weekly Availability</h3>
           <div style={{ display: 'grid', gap: '20px', marginBottom: '30px' }}>
             {daysOfWeek.map(day => {

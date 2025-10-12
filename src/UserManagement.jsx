@@ -106,6 +106,7 @@ export default function UserManagement() {
   const handleEditUser = (user) => {
     setEditingUser(user.id)
     setEditForm({
+      full_name: user.full_name || '',
       user_role: user.user_role,
       employee_id: user.employee_id || '',
       is_active: user.is_active
@@ -114,20 +115,31 @@ export default function UserManagement() {
 
   const handleSaveUser = async () => {
     try {
+      // Convert empty string to null for employee_id
+      const updateData = {
+        ...editForm,
+        employee_id: editForm.employee_id || null
+      }
+      
+      console.log('Saving user update:', updateData)
+      
       const { error } = await supabase
         .from('user_profiles')
-        .update(editForm)
+        .update(updateData)
         .eq('id', editingUser)
 
       if (error) {
+        console.error('Save error:', error)
         alert('Error updating user: ' + error.message)
         return
       }
 
+      console.log('User updated successfully')
+
       // Update local state
       setUsers(users.map(user => 
         user.id === editingUser 
-          ? { ...user, ...editForm }
+          ? { ...user, ...updateData }
           : user
       ))
 
@@ -179,40 +191,27 @@ export default function UserManagement() {
     try {
       console.log('Creating user account:', createForm.email)
 
-      // Create auth user first
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: createForm.email,
-        password: createForm.password,
-        email_confirm: true
-      })
-
-      if (authError) {
-        console.error('Auth creation error:', authError)
-        setError('Failed to create auth user: ' + authError.message)
-        return
-      }
-
-      console.log('Auth user created:', authData.user?.id)
-
-      // Create user profile
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .insert({
-          id: authData.user.id,
+      // Create user via serverless endpoint (server uses service role key)
+      const res = await fetch('/.netlify/functions/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           email: createForm.email,
+          password: createForm.password,
           user_role: createForm.user_role,
           full_name: createForm.full_name,
-          employee_id: createForm.employee_id || null,
-          is_active: true
+          employee_id: createForm.employee_id || null
         })
+      })
 
-      if (profileError) {
-        console.error('Profile creation error:', profileError)
-        setError('Failed to create user profile: ' + profileError.message)
+      const json = await res.json()
+      if (!res.ok) {
+        console.error('Server create-user error:', json)
+        setError('Failed to create user: ' + (json?.error || JSON.stringify(json)))
         return
       }
 
-      console.log('User profile created successfully')
+      console.log('User created via server, id:', json.userId)
 
       // Reset form and refresh data
       setCreateForm({
@@ -351,6 +350,7 @@ export default function UserManagement() {
                 >
                   <option value="staff">Staff</option>
                   <option value="manager">Manager</option>
+                  <option value="owner">Owner</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>
@@ -456,6 +456,18 @@ export default function UserManagement() {
               <div>
                 <h3 style={{ marginBottom: '1rem', color: '#856404' }}>Editing User</h3>
                 <div style={{ display: 'grid', gap: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                      Full Name:
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.full_name}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, full_name: e.target.value }))}
+                      placeholder="Enter full name"
+                      style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+                    />
+                  </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div>
                       <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
@@ -468,6 +480,7 @@ export default function UserManagement() {
                       >
                         <option value="staff">Staff</option>
                         <option value="manager">Manager</option>
+                        <option value="owner">Owner</option>
                         <option value="admin">Admin</option>
                       </select>
                     </div>
@@ -543,9 +556,11 @@ export default function UserManagement() {
                         marginLeft: '0.5rem',
                         backgroundColor: 
                           user.user_role === 'admin' ? '#dbeafe' : 
+                          user.user_role === 'owner' ? '#fce7f3' :
                           user.user_role === 'manager' ? '#fef3c7' : '#f0fdf4',
                         color: 
                           user.user_role === 'admin' ? '#1e40af' : 
+                          user.user_role === 'owner' ? '#9f1239' :
                           user.user_role === 'manager' ? '#92400e' : '#166534'
                       }}>
                         {user.user_role?.charAt(0).toUpperCase() + user.user_role?.slice(1)}

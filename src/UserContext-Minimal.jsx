@@ -43,10 +43,30 @@ export const UserProvider = ({ children }) => {
           return
         }
 
+        // Try to fetch user profile from database
+        let userProfile = null
+        try {
+          const { data: profileData, error: profileError } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', authUser.id)
+            .single()
+          
+          if (!profileError && profileData) {
+            userProfile = profileData
+            console.log('Fetched user profile:', userProfile)
+          }
+        } catch (err) {
+          console.log('Could not fetch user profile, using defaults:', err)
+        }
+
         // Create a minimal user object - bypass all permission checks
         const minimalUser = {
           id: authUser.id,
           email: authUser.email,
+          full_name: userProfile?.full_name || authUser.email?.split('@')[0] || 'User',
+          user_role: userProfile?.user_role || 'admin',
+          employee_id: userProfile?.employee_id || null,
           role: 'admin', // Default to admin to bypass all restrictions
           permissions: {
             can_view_all: true,
@@ -58,7 +78,9 @@ export const UserProvider = ({ children }) => {
           }
         }
 
-        console.log('Setting minimal user:', minimalUser)
+        console.log('UserContext: Setting minimal user:', minimalUser)
+        console.log('UserContext: User role:', minimalUser.user_role)
+        console.log('UserContext: Employee ID:', minimalUser.employee_id)
         if (isMounted) {
           setUser(minimalUser)
           setLoading(false)
@@ -80,6 +102,9 @@ export const UserProvider = ({ children }) => {
         setUser({
           id: 'default',
           email: 'admin@admin.com',
+          full_name: 'Admin',
+          user_role: 'admin',
+          employee_id: null,
           role: 'admin',
           permissions: {
             can_view_all: true,
@@ -129,12 +154,37 @@ export const UserProvider = ({ children }) => {
     }
   }
 
-  // Permission functions - always return true since we're bypassing all restrictions
-  const canManageEmployees = () => true
-  const canManageUserAccounts = () => true
-  const canViewAll = () => true
-  const canEdit = () => true
-  const canDelete = () => true
+  // Permission functions based on user role
+  const canManageEmployees = () => {
+    // Managers, Owners, and Admins can manage employees, schedules, and time-off
+    return user?.user_role === 'manager' || user?.user_role === 'owner' || user?.user_role === 'admin'
+  }
+  
+  const canManageUserAccounts = () => {
+    // Managers, Owners, and Admins can manage user accounts
+    return user?.user_role === 'manager' || user?.user_role === 'owner' || user?.user_role === 'admin'
+  }
+  
+  const canViewAll = () => {
+    // Managers, Owners, and Admins can view all employees
+    // Staff can only view their own data (controlled in components)
+    return user?.user_role === 'manager' || user?.user_role === 'owner' || user?.user_role === 'admin'
+  }
+  
+  const canEdit = () => {
+    // Managers, Owners, and Admins can edit schedules and templates
+    return user?.user_role === 'manager' || user?.user_role === 'owner' || user?.user_role === 'admin'
+  }
+  
+  const canDelete = () => {
+    // Managers, Owners, and Admins can delete items
+    return user?.user_role === 'manager' || user?.user_role === 'owner' || user?.user_role === 'admin'
+  }
+  
+  const canManageOwnData = () => {
+    // All users can manage their own availability and time-off
+    return true
+  }
 
   const value = {
     user,
@@ -145,7 +195,8 @@ export const UserProvider = ({ children }) => {
     canManageUserAccounts,
     canViewAll,
     canEdit,
-    canDelete
+    canDelete,
+    canManageOwnData
   }
 
   return (
