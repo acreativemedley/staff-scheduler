@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 import { parseDate, formatDateForInput, formatDateDisplay, getWeekDates, isDateInRange, isSameDay } from './dateUtils';
 import { extractTimeOnly, normalizeTime } from './timeUtils';
 import { useUser } from './UserContext-Minimal';
+import { theme } from './theme';
 
 export default function ScheduleGenerator() {
   const { canEdit, userProfile } = useUser();
@@ -21,6 +22,7 @@ export default function ScheduleGenerator() {
   const [viewMode, setViewMode] = useState('week'); // 'week' or 'month'
   const [currentMonth, setCurrentMonth] = useState('');
   const [calendarEvents, setCalendarEvents] = useState({});
+  const [editingShiftId, setEditingShiftId] = useState(null); // Track which shift is being edited
 
   const GOOGLE_CALENDAR_ID = 'fc4e0d1faabf03c4e7f0934b1087b4b244bda5f8d76bc3ae7f278e02e21d82eb@group.calendar.google.com';
 
@@ -1343,8 +1345,8 @@ export default function ScheduleGenerator() {
       maxWidth: '100%',
       boxSizing: 'border-box'
     }}>
-      <h2>Schedule Manager</h2>
-      <p style={{ marginBottom: '20px', color: '#6b7280' }}>
+      <h2 style={{ color: theme.textPrimary }}>Schedule Manager</h2>
+      <p style={{ marginBottom: '20px', color: theme.textSecondary }}>
         Load your predefined base schedule and edit as needed. Time-off conflicts are highlighted in red.
         <strong> Set up your base schedule first using the "Base Schedule" tab.</strong>
       </p>
@@ -1360,8 +1362,8 @@ export default function ScheduleGenerator() {
           onClick={() => setViewMode('week')}
           style={{
             padding: '8px 16px',
-            backgroundColor: viewMode === 'week' ? '#3b82f6' : '#e5e7eb',
-            color: viewMode === 'week' ? 'white' : '#374151',
+            backgroundColor: viewMode === 'week' ? '#3b82f6' : theme.bgSecondary,
+            color: viewMode === 'week' ? 'white' : theme.textPrimary,
             border: 'none',
             borderRadius: '6px',
             cursor: 'pointer',
@@ -1374,8 +1376,8 @@ export default function ScheduleGenerator() {
           onClick={() => setViewMode('month')}
           style={{
             padding: '8px 16px',
-            backgroundColor: viewMode === 'month' ? '#3b82f6' : '#e5e7eb',
-            color: viewMode === 'month' ? 'white' : '#374151',
+            backgroundColor: viewMode === 'month' ? '#3b82f6' : theme.bgSecondary,
+            color: viewMode === 'month' ? 'white' : theme.textPrimary,
             border: 'none',
             borderRadius: '6px',
             cursor: 'pointer',
@@ -1394,7 +1396,7 @@ export default function ScheduleGenerator() {
           alignItems: 'center', 
           marginBottom: '20px',
           padding: '15px',
-          backgroundColor: '#f9fafb',
+          backgroundColor: theme.cardBg,
           borderRadius: '8px'
         }}>
           <button
@@ -1413,7 +1415,7 @@ export default function ScheduleGenerator() {
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             <div style={{ textAlign: 'center' }}>
-              <h3 style={{ margin: '0 0 5px 0' }}>
+              <h3 style={{ margin: '0 0 5px 0', color: theme.textPrimary }}>
                 Week of {formatDateHeader(getWeekDates(new Date(currentWeek + 'T00:00:00'))[0])} - {formatDateHeader(getWeekDates(new Date(currentWeek + 'T00:00:00'))[6])}
               </h3>
               <input
@@ -1427,8 +1429,10 @@ export default function ScheduleGenerator() {
                 style={{
                   padding: '6px',
                   fontSize: '14px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px'
+                  border: `1px solid ${theme.inputBorder}`,
+                  borderRadius: '4px',
+                  backgroundColor: theme.inputBg,
+                  color: theme.textPrimary
                 }}
               />
             </div>
@@ -1469,7 +1473,7 @@ export default function ScheduleGenerator() {
           alignItems: 'center', 
           marginBottom: '20px',
           padding: '15px',
-          backgroundColor: '#f9fafb',
+          backgroundColor: theme.cardBg,
           borderRadius: '8px'
         }}>
           <button
@@ -1488,7 +1492,7 @@ export default function ScheduleGenerator() {
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             <div style={{ textAlign: 'center' }}>
-              <h3 style={{ margin: '0 0 5px 0' }}>
+              <h3 style={{ margin: '0 0 5px 0', color: theme.textPrimary }}>
                 {formatMonthYear(currentMonth)}
               </h3>
               <input
@@ -1502,8 +1506,10 @@ export default function ScheduleGenerator() {
                 style={{
                   padding: '6px',
                   fontSize: '14px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px'
+                  border: `1px solid ${theme.inputBorder}`,
+                  borderRadius: '4px',
+                  backgroundColor: theme.inputBg,
+                  color: theme.textPrimary
                 }}
               />
             </div>
@@ -1584,15 +1590,18 @@ export default function ScheduleGenerator() {
       {/* Schedule Display */}
       {viewMode === 'week' ? (
         <div style={{ 
-          border: '1px solid #d1d5db',
+          border: `1px solid ${theme.border}`,
           borderRadius: '8px',
-          backgroundColor: 'white',
-          width: '100%'
+          backgroundColor: theme.bgPrimary,
+          width: '100%',
+          overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch'
         }}>
           <div style={{ 
             display: 'grid', 
-            gridTemplateColumns: 'repeat(7, 1fr)',
+            gridTemplateColumns: 'repeat(7, minmax(150px, 1fr))',
             width: '100%',
+            minWidth: '1050px',
             minHeight: '400px'
           }}>
             {getWeekDates(new Date(currentWeek + 'T00:00:00')).map((date, index) => {
@@ -1605,21 +1614,21 @@ export default function ScheduleGenerator() {
                   style={{
                     border: index < 6 ? '0 1px 0 0' : '0',
                     borderStyle: 'solid',
-                    borderColor: '#e5e7eb',
+                    borderColor: theme.border,
                     minHeight: '400px'
                   }}
                 >
                   {/* Day Header */}
                   <div style={{
                     padding: '12px 8px',
-                    backgroundColor: '#f3f4f6',
-                    borderBottom: '1px solid #e5e7eb',
+                    backgroundColor: theme.bgSecondary,
+                    borderBottom: `1px solid ${theme.border}`,
                     textAlign: 'center'
                   }}>
-                    <div style={{ fontWeight: 'bold', fontSize: '15px' }}>
+                    <div style={{ fontWeight: 'bold', fontSize: '15px', color: theme.textPrimary }}>
                       {formatDateHeader(date)}
                     </div>
-                    <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                    <div style={{ fontSize: '11px', color: theme.textSecondary, marginTop: '4px' }}>
                       {getStoreHours(date)}
                     </div>
                   </div>
@@ -1639,6 +1648,9 @@ export default function ScheduleGenerator() {
                             employees={employees}
                             canEdit={canEdit()}
                             currentUserEmployeeId={userProfile?.employee_id}
+                            isEditing={editingShiftId === shift.id}
+                            onStartEdit={() => setEditingShiftId(shift.id)}
+                            onCancelEdit={() => setEditingShiftId(null)}
                           />
                         ))}
                         
@@ -1649,12 +1661,12 @@ export default function ScheduleGenerator() {
                               width: '100%',
                               padding: '8px',
                               marginTop: '10px',
-                              backgroundColor: '#f3f4f6',
-                              border: '1px dashed #9ca3af',
+                              backgroundColor: theme.bgSecondary,
+                              border: `1px dashed ${theme.border}`,
                               borderRadius: '4px',
                               cursor: 'pointer',
                               fontSize: '14px',
-                              color: '#6b7280'
+                              color: theme.textSecondary
                             }}
                           >
                             + Add Employee
@@ -1664,7 +1676,7 @@ export default function ScheduleGenerator() {
                     ) : (
                       <div style={{ 
                         textAlign: 'center', 
-                        color: '#9ca3af', 
+                        color: theme.textSecondary, 
                         padding: '20px',
                         fontSize: '14px'
                       }}>
@@ -1677,12 +1689,12 @@ export default function ScheduleGenerator() {
                       <div style={{
                         marginTop: '15px',
                         paddingTop: '15px',
-                        borderTop: '2px solid #e5e7eb'
+                        borderTop: `2px solid ${theme.border}`
                       }}>
                         <div style={{
                           fontSize: '12px',
                           fontWeight: 'bold',
-                          color: '#374151',
+                          color: theme.textPrimary,
                           marginBottom: '8px',
                           textAlign: 'center'
                         }}>
@@ -1695,22 +1707,22 @@ export default function ScheduleGenerator() {
                               fontSize: '11px',
                               padding: '6px 8px',
                               margin: '4px 0',
-                              backgroundColor: '#fef3c7',
+                              backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#854d0e' : '#fef3c7',
                               border: '1px solid #f59e0b',
                               borderRadius: '4px',
-                              color: '#92400e'
+                              color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fef3c7' : '#92400e'
                             }}
                           >
                             <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>
                               {event.title}
                             </div>
                             {!event.isAllDay && event.startTime && event.endTime && (
-                              <div style={{ fontSize: '10px', color: '#78716c' }}>
+                              <div style={{ fontSize: '10px', color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fde68a' : '#78716c' }}>
                                 {formatTimeShort(new Date(event.startTime).toTimeString().substring(0, 5))} - {formatTimeShort(new Date(event.endTime).toTimeString().substring(0, 5))}
                               </div>
                             )}
                             {event.isAllDay && (
-                              <div style={{ fontSize: '10px', color: '#78716c' }}>
+                              <div style={{ fontSize: '10px', color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fde68a' : '#78716c' }}>
                                 All Day
                               </div>
                             )}
@@ -1743,25 +1755,25 @@ export default function ScheduleGenerator() {
       <div style={{
         marginTop: '20px',
         padding: '15px',
-        backgroundColor: '#f9fafb',
+        backgroundColor: theme.cardBg,
         borderRadius: '8px'
       }}>
-        <h4 style={{ margin: '0 0 10px 0' }}>Legend:</h4>
-        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '14px' }}>
+        <h4 style={{ margin: '0 0 10px 0', color: theme.textPrimary }}>Legend:</h4>
+        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '14px', color: theme.textPrimary }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <div style={{ width: '15px', height: '15px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '3px' }} />
+            <div style={{ width: '15px', height: '15px', backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#991b1b' : '#fef2f2', border: '1px solid #fecaca', borderRadius: '3px' }} />
             <span>Time-off Conflict (Full Day)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <div style={{ width: '15px', height: '15px', backgroundColor: '#fffbeb', border: '1px solid #fed7aa', borderRadius: '3px' }} />
+            <div style={{ width: '15px', height: '15px', backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#854d0e' : '#fffbeb', border: '1px solid #fed7aa', borderRadius: '3px' }} />
             <span>Partial Day Time-off</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <div style={{ width: '15px', height: '15px', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '3px' }} />
+            <div style={{ width: '15px', height: '15px', backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#075985' : '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '3px' }} />
             <span>Manager</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <div style={{ width: '15px', height: '15px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '3px' }} />
+            <div style={{ width: '15px', height: '15px', backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#166534' : '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '3px' }} />
             <span>Staff</span>
           </div>
         </div>
@@ -1782,7 +1794,7 @@ export default function ScheduleGenerator() {
           zIndex: 1000
         }}>
           <div style={{
-            backgroundColor: 'white',
+            backgroundColor: theme.cardBg,
             borderRadius: '8px',
             padding: '24px',
             minWidth: '400px',
@@ -1791,7 +1803,7 @@ export default function ScheduleGenerator() {
             overflowY: 'auto',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
           }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 'bold' }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 'bold', color: theme.textPrimary }}>
               Add Employee to {modalDateKey ? formatDateHeader(new Date(modalDateKey + 'T00:00:00')) : 'Day'}
             </h3>
             
@@ -1804,11 +1816,11 @@ export default function ScheduleGenerator() {
               <div style={{ 
                 marginBottom: '16px', 
                 padding: '8px 12px', 
-                backgroundColor: '#f9fafb', 
+                backgroundColor: theme.bgSecondary, 
                 borderRadius: '4px',
                 fontSize: '12px'
               }}>
-                <div style={{ fontWeight: 'bold', marginBottom: '6px', color: '#374151' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '6px', color: theme.textPrimary }}>
                   Availability Status:
                 </div>
                 <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
@@ -1816,31 +1828,31 @@ export default function ScheduleGenerator() {
                     <div style={{ 
                       width: '12px', 
                       height: '12px', 
-                      backgroundColor: '#f0fdf4', 
+                      backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#166534' : '#f0fdf4', 
                       border: '1px solid #bbf7d0', 
                       borderRadius: '2px' 
                     }} />
-                    <span style={{ color: '#16a34a' }}>Available</span>
+                    <span style={{ color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#86efac' : '#16a34a' }}>Available</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <div style={{ 
                       width: '12px', 
                       height: '12px', 
-                      backgroundColor: '#fffbeb', 
+                      backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#854d0e' : '#fffbeb', 
                       border: '1px solid #fed7aa', 
                       borderRadius: '2px' 
                     }} />
-                    <span style={{ color: '#d97706' }}>Partial Time Off</span>
+                    <span style={{ color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fde68a' : '#d97706' }}>Partial Time Off</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <div style={{ 
                       width: '12px', 
                       height: '12px', 
-                      backgroundColor: '#fef2f2', 
+                      backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#991b1b' : '#fef2f2', 
                       border: '1px solid #fecaca', 
                       borderRadius: '2px' 
                     }} />
-                    <span style={{ color: '#dc2626' }}>Unavailable</span>
+                    <span style={{ color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fca5a5' : '#dc2626' }}>Unavailable</span>
                   </div>
                 </div>
               </div>
@@ -2224,22 +2236,34 @@ function MonthView({
   );
 }
 
-function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees, canEdit, currentUserEmployeeId }) {
-  const [isEditing, setIsEditing] = useState(false);
+function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees, canEdit, currentUserEmployeeId, isEditing, onStartEdit, onCancelEdit }) {
   const [tempValues, setTempValues] = useState({
     employee_id: shift.employee.id,
     start_time: shift.start_time,
     end_time: shift.end_time
   });
 
+  // Reset temp values when editing is cancelled or when shift data changes
+  useEffect(() => {
+    if (!isEditing) {
+      setTempValues({
+        employee_id: shift.employee.id,
+        start_time: shift.start_time,
+        end_time: shift.end_time
+      });
+    }
+  }, [isEditing, shift.employee.id, shift.start_time, shift.end_time]);
+
   const isCurrentUser = currentUserEmployeeId && shift.employee.id === currentUserEmployeeId;
 
   const getShiftBackgroundColor = () => {
-    if (shift.conflict) return '#fef2f2'; // Red for full day conflicts
-    if (shift.partialTimeOff) return '#fffbeb'; // Yellow for partial conflicts
-    if (shift.employee.role === 'manager') return '#f0f9ff'; // Blue for managers
-    if (shift.employee.role === 'tech') return '#faf5ff'; // Purple for tech
-    return '#f0fdf4'; // Green for staff
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (shift.conflict) return isDark ? '#991b1b' : '#fef2f2'; // Red for full day conflicts
+    if (shift.partialTimeOff) return isDark ? '#854d0e' : '#fffbeb'; // Yellow for partial conflicts
+    if (shift.employee.role === 'manager') return isDark ? '#075985' : '#f0f9ff'; // Blue for managers
+    if (shift.employee.role === 'tech') return isDark ? '#581c87' : '#faf5ff'; // Purple for tech
+    return isDark ? '#166534' : '#f0fdf4'; // Green for staff
   };
 
   const getBorderColor = () => {
@@ -2259,11 +2283,10 @@ function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees, 
   };
 
   const handleSave = () => {
-    const selectedEmployee = employees.find(emp => emp.id === tempValues.employee_id);
-    onUpdate(dateKey, shift.id, 'employee', selectedEmployee);
+    // Only update times, not employee
     onUpdate(dateKey, shift.id, 'start_time', tempValues.start_time);
     onUpdate(dateKey, shift.id, 'end_time', tempValues.end_time);
-    setIsEditing(false);
+    onCancelEdit();
   };
 
   const handleCancel = () => {
@@ -2272,7 +2295,7 @@ function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees, 
       start_time: shift.start_time,
       end_time: shift.end_time
     });
-    setIsEditing(false);
+    onCancelEdit();
   };
 
   return (
@@ -2283,29 +2306,29 @@ function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees, 
         borderRadius: '6px',
         padding: '10px',
         marginBottom: '8px',
-        fontSize: '12px'
+        fontSize: '12px',
+        position: 'relative',
+        zIndex: isEditing ? 10 : 1
       }}
     >
       {isEditing ? (
         <div>
-          <select
-            value={tempValues.employee_id}
-            onChange={(e) => setTempValues(prev => ({ ...prev, employee_id: e.target.value }))}
-            style={{
-              width: '100%',
-              padding: '4px',
-              fontSize: '12px',
-              marginBottom: '8px',
-              border: '1px solid #d1d5db',
-              borderRadius: '4px'
-            }}
-          >
-            {employees.map(emp => (
-              <option key={emp.id} value={emp.id}>
-                {emp.display_name || emp.full_name} ({emp.position})
-              </option>
-            ))}
-          </select>
+          {/* Display employee name (non-editable) */}
+          <div style={{ 
+            fontWeight: 'bold', 
+            marginBottom: '8px', 
+            color: theme.textPrimary,
+            fontSize: '13px'
+          }}>
+            {shift.employee.display_name || shift.employee.full_name}
+          </div>
+          <div style={{ 
+            color: theme.textSecondary, 
+            marginBottom: '8px',
+            fontSize: '11px'
+          }}>
+            {shift.employee.position}
+          </div>
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px', marginBottom: '8px' }}>
             <input
@@ -2315,8 +2338,10 @@ function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees, 
               style={{
                 padding: '4px',
                 fontSize: '12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px'
+                border: `1px solid ${theme.inputBorder}`,
+                borderRadius: '4px',
+                backgroundColor: theme.inputBg,
+                color: theme.textPrimary
               }}
             />
             <input
@@ -2326,8 +2351,10 @@ function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees, 
               style={{
                 padding: '4px',
                 fontSize: '12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px'
+                border: `1px solid ${theme.inputBorder}`,
+                borderRadius: '4px',
+                backgroundColor: theme.inputBg,
+                color: theme.textPrimary
               }}
             />
           </div>
@@ -2367,24 +2394,24 @@ function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees, 
         </div>
       ) : (
         <div>
-          <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '4px', color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#f3f4f6' : '#111827' }}>
             {shift.employee.display_name || shift.employee.full_name}
           </div>
-          <div style={{ color: '#6b7280', marginBottom: '4px' }}>
+          <div style={{ color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#d1d5db' : '#6b7280', marginBottom: '4px' }}>
             {shift.employee.position}
           </div>
-          <div style={{ marginBottom: '8px' }}>
+          <div style={{ marginBottom: '8px', color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#e5e7eb' : '#374151' }}>
             {formatTime(shift.start_time)} - {formatTime(shift.end_time)}
           </div>
           
           {shift.conflict && (
-            <div style={{ color: '#dc2626', fontSize: '11px', marginBottom: '4px' }}>
+            <div style={{ color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fca5a5' : '#dc2626', fontSize: '11px', marginBottom: '4px' }}>
               ⚠️ Full Day Time-off
             </div>
           )}
           
           {shift.partialTimeOff && (
-            <div style={{ color: '#d97706', fontSize: '11px', marginBottom: '4px' }}>
+            <div style={{ color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fde68a' : '#d97706', fontSize: '11px', marginBottom: '4px' }}>
               ⚠️ Available: {formatTime(shift.partialTimeOff.partial_start_time)} - {formatTime(shift.partialTimeOff.partial_end_time)}
             </div>
           )}
@@ -2392,7 +2419,7 @@ function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees, 
           {canEdit && (
             <div style={{ display: 'flex', gap: '5px' }}>
               <button
-                onClick={() => setIsEditing(true)}
+                onClick={onStartEdit}
                 style={{
                   flex: 1,
                   padding: '4px 8px',

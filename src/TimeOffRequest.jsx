@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { parseDate } from './dateUtils';
 import { useUser } from './UserContext-Minimal';
+import { theme } from './theme';
 
 export default function TimeOffRequest() {
   const { userProfile, canManageEmployees } = useUser();
@@ -262,8 +263,8 @@ export default function TimeOffRequest() {
 
   return (
     <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
-      <h2>Submit Time-Off Request</h2>
-      <p style={{ marginBottom: '30px', color: '#6b7280' }}>
+      <h2 style={{ color: theme.textPrimary }}>Submit Time-Off Request</h2>
+      <p style={{ marginBottom: '30px', color: theme.textSecondary }}>
         Submit requests for full days off or partial days with specific times.
       </p>
 
@@ -297,16 +298,16 @@ export default function TimeOffRequest() {
               width: '100%',
               padding: '10px',
               fontSize: '16px',
-              border: '1px solid #e5e7eb',
+              border: `1px solid ${theme.inputBorder}`,
               borderRadius: '5px',
-              backgroundColor: '#f9fafb',
-              color: '#374151'
+              backgroundColor: theme.bgSecondary,
+              color: theme.textPrimary
             }}>
               {employees.find(emp => emp.id === formData.employee_id)?.full_name || 'Not linked to an employee'}
             </div>
           )}
           {!canManageEmployees() && !formData.employee_id && (
-            <p style={{ color: '#dc2626', fontSize: '14px', marginTop: '4px' }}>
+            <p style={{ color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fca5a5' : '#dc2626', fontSize: '14px', marginTop: '4px' }}>
               Your account is not linked to an employee. Please contact an administrator.
             </p>
           )}
@@ -334,7 +335,7 @@ export default function TimeOffRequest() {
         </div>
 
         {/* Date Range */}
-        <div style={{ display: 'grid', gridTemplateColumns: formData.is_recurring ? '1fr' : '1fr 1fr', gap: '15px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: formData.is_recurring ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
           <div>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
               {formData.is_recurring ? 'Pattern Start Date: *' : 'Start Date: *'}
@@ -373,14 +374,15 @@ export default function TimeOffRequest() {
                   width: '100%',
                   padding: '10px',
                   fontSize: '16px',
-                  border: '1px solid #d1d5db',
+                  border: `1px solid ${theme.inputBorder}`,
                   borderRadius: '5px',
-                  backgroundColor: formData.request_type === 'partial_day' ? '#f3f4f6' : 'white',
+                  backgroundColor: formData.request_type === 'partial_day' ? theme.bgSecondary : theme.inputBg,
+                  color: theme.textPrimary,
                   cursor: formData.request_type === 'partial_day' ? 'not-allowed' : 'default'
                 }}
               />
               {formData.request_type === 'partial_day' && (
-                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                <p style={{ fontSize: '12px', color: theme.textSecondary, marginTop: '4px' }}>
                   End date automatically matches start date for partial days
                 </p>
               )}
@@ -391,11 +393,11 @@ export default function TimeOffRequest() {
         {/* Partial Day Times */}
         {formData.request_type === 'partial_day' && (
           <div>
-            <h4 style={{ margin: '0 0 10px 0', color: '#374151' }}>Available Times (when you CAN work)</h4>
-            <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '15px' }}>
+            <h4 style={{ margin: '0 0 10px 0', color: theme.textPrimary }}>Available Times (when you CAN work)</h4>
+            <p style={{ fontSize: '14px', color: theme.textSecondary, marginBottom: '15px' }}>
               Specify the hours you ARE available to work on this day. You'll be off during all other hours.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
                   Available From: *
@@ -489,7 +491,7 @@ export default function TimeOffRequest() {
               display: 'grid',
               gap: '15px'
             }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
                     Pattern: *
@@ -613,8 +615,12 @@ export default function TimeOffRequest() {
             padding: '12px',
             borderRadius: '6px',
             textAlign: 'center',
-            backgroundColor: message.includes('Error') ? '#fef2f2' : '#f0fdf4',
-            color: message.includes('Error') ? '#dc2626' : '#16a34a',
+            backgroundColor: message.includes('Error') 
+              ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? '#991b1b' : '#fef2f2')
+              : (window.matchMedia('(prefers-color-scheme: dark)').matches ? '#166534' : '#f0fdf4'),
+            color: message.includes('Error') 
+              ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fca5a5' : '#dc2626')
+              : (window.matchMedia('(prefers-color-scheme: dark)').matches ? '#86efac' : '#16a34a'),
             border: `1px solid ${message.includes('Error') ? '#fecaca' : '#bbf7d0'}`,
             fontWeight: 'bold'
           }}>
@@ -628,8 +634,8 @@ export default function TimeOffRequest() {
             padding: '12px',
             borderRadius: '6px',
             textAlign: 'center',
-            backgroundColor: '#fffbeb',
-            color: '#d97706',
+            backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#854d0e' : '#fffbeb',
+            color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fde68a' : '#d97706',
             border: '1px solid #fed7aa',
             fontWeight: 'bold'
           }}>
@@ -639,8 +645,8 @@ export default function TimeOffRequest() {
       </div>
 
       {/* Quick Action Buttons */}
-      <div style={{ marginTop: '30px', padding: '20px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
-        <h4>Quick Actions (Recommended: 4+ weeks in advance):</h4>
+      <div style={{ marginTop: '30px', padding: '20px', backgroundColor: theme.cardBg, borderRadius: '8px' }}>
+        <h4 style={{ color: theme.textPrimary }}>Quick Actions (Recommended: 4+ weeks in advance):</h4>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginTop: '10px' }}>
           <button
             onClick={() => handleInputChange('start_date', formatDateForInput(28))}

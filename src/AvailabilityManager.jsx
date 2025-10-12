@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { useUser } from './UserContext-Minimal';
+import { theme } from './theme';
 
 export default function AvailabilityManager() {
   const { userProfile, canManageEmployees } = useUser();
@@ -177,18 +178,37 @@ export default function AvailabilityManager() {
   };
 
   const getStatusColor = (status) => {
-    const statusOption = statusOptions.find(opt => opt.value === status);
-    return statusOption ? statusOption.color : '#e5e7eb';
+    const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (!status) return isDark ? theme.inputBg : '#e5e7eb';
+    
+    // Dark mode: use darker backgrounds with lighter text
+    // Light mode: use bright backgrounds with dark text
+    if (isDark) {
+      switch(status) {
+        case 'green': return '#166534'; // dark green
+        case 'yellow': return '#854d0e'; // dark yellow/orange
+        case 'red': return '#991b1b'; // dark red
+        default: return theme.inputBg;
+      }
+    } else {
+      switch(status) {
+        case 'green': return '#4ade80'; // bright green
+        case 'yellow': return '#fbbf24'; // bright yellow
+        case 'red': return '#f87171'; // bright red
+        default: return '#e5e7eb';
+      }
+    }
   };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1000px', margin: '0 auto' }}>
+    <div style={{ padding: '20px', maxWidth: '1000px', margin: '0 auto', color: theme.textPrimary }}>
       <h2>Employee Availability Manager</h2>
       <p>Set employee availability by day of the week with time constraints.</p>
 
       {/* Employee Selection */}
       <div style={{ marginBottom: '30px' }}>
-        <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
+        <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold', color: theme.labelColor }}>
           {canManageEmployees() ? 'Select Employee:' : 'Your Availability:'}
         </label>
         {canManageEmployees() ? (
@@ -199,8 +219,10 @@ export default function AvailabilityManager() {
               width: '300px',
               padding: '10px',
               fontSize: '16px',
-              border: '1px solid #d1d5db',
-              borderRadius: '5px'
+              border: `1px solid ${theme.inputBorder}`,
+              borderRadius: '5px',
+              backgroundColor: theme.inputBg,
+              color: theme.textPrimary
             }}
           >
             <option value="">Choose an employee...</option>
@@ -215,10 +237,10 @@ export default function AvailabilityManager() {
             width: '300px',
             padding: '10px',
             fontSize: '16px',
-            border: '1px solid #e5e7eb',
+            border: `1px solid ${theme.borderLight}`,
             borderRadius: '5px',
-            backgroundColor: '#f9fafb',
-            color: '#374151'
+            backgroundColor: theme.inputDisabledBg,
+            color: theme.textPrimary
           }}>
             {employees.find(emp => emp.id === selectedEmployee)?.full_name || 'Not linked to an employee'}
           </div>
@@ -238,16 +260,20 @@ export default function AvailabilityManager() {
             padding: '20px',
             border: '2px solid #3b82f6',
             borderRadius: '8px',
-            backgroundColor: '#eff6ff'
+            backgroundColor: theme.cardBg
           }}>
-            <h3 style={{ marginTop: 0, color: '#1e40af' }}>Weekly Hours Preferences</h3>
-            <p style={{ fontSize: '14px', color: '#4b5563', marginBottom: '15px' }}>
+            <h3 style={{ marginTop: 0, color: '#3b82f6' }}>Weekly Hours Preferences</h3>
+            <p style={{ fontSize: '14px', color: theme.textSecondary, marginBottom: '15px' }}>
               Set your preferred working hours per week. This helps managers create schedules that match your availability.
             </p>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+              gap: '15px' 
+            }}>
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#374151' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: theme.labelColor }}>
                   Minimum Hours/Week:
                 </label>
                 <input
@@ -264,18 +290,20 @@ export default function AvailabilityManager() {
                     width: '100%',
                     padding: '10px',
                     fontSize: '16px',
-                    border: '1px solid #d1d5db',
+                    border: `1px solid ${theme.inputBorder}`,
                     borderRadius: '5px',
-                    boxSizing: 'border-box'
+                    boxSizing: 'border-box',
+                    backgroundColor: theme.inputBg,
+                    color: theme.textPrimary
                   }}
                 />
-                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '5px', marginBottom: 0 }}>
+                <p style={{ fontSize: '12px', color: theme.textSecondary, marginTop: '5px', marginBottom: 0 }}>
                   Minimum hours you prefer
                 </p>
               </div>
               
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#374151' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: theme.labelColor }}>
                   Ideal Hours/Week:
                 </label>
                 <input
@@ -292,18 +320,20 @@ export default function AvailabilityManager() {
                     width: '100%',
                     padding: '10px',
                     fontSize: '16px',
-                    border: '1px solid #d1d5db',
+                    border: `1px solid ${theme.inputBorder}`,
                     borderRadius: '5px',
-                    boxSizing: 'border-box'
+                    boxSizing: 'border-box',
+                    backgroundColor: theme.inputBg,
+                    color: theme.textPrimary
                   }}
                 />
-                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '5px', marginBottom: 0 }}>
+                <p style={{ fontSize: '12px', color: theme.textSecondary, marginTop: '5px', marginBottom: 0 }}>
                   Your ideal hours
                 </p>
               </div>
               
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#374151' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: theme.labelColor }}>
                   Maximum Hours/Week:
                 </label>
                 <input
@@ -320,12 +350,14 @@ export default function AvailabilityManager() {
                     width: '100%',
                     padding: '10px',
                     fontSize: '16px',
-                    border: '1px solid #d1d5db',
+                    border: `1px solid ${theme.inputBorder}`,
                     borderRadius: '5px',
-                    boxSizing: 'border-box'
+                    boxSizing: 'border-box',
+                    backgroundColor: theme.inputBg,
+                    color: theme.textPrimary
                   }}
                 />
-                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '5px', marginBottom: 0 }}>
+                <p style={{ fontSize: '12px', color: theme.textSecondary, marginTop: '5px', marginBottom: 0 }}>
                   Maximum hours you prefer
                 </p>
               </div>
@@ -340,16 +372,16 @@ export default function AvailabilityManager() {
                 <div
                   key={day.id}
                   style={{
-                    border: '1px solid #d1d5db',
+                    border: `1px solid ${theme.border}`,
                     borderRadius: '8px',
                     padding: '15px',
-                    backgroundColor: '#f9fafb'
+                    backgroundColor: theme.cardBg
                   }}
                 >
                   <h4 style={{ 
                     margin: '0 0 15px 0',
-                    color: '#374151',
-                    borderBottom: '2px solid #e5e7eb',
+                    color: theme.textPrimary,
+                    borderBottom: `2px solid ${theme.borderLight}`,
                     paddingBottom: '5px'
                   }}>
                     {day.name}
@@ -357,7 +389,7 @@ export default function AvailabilityManager() {
                   
                   {/* Status Selection */}
                   <div style={{ marginBottom: '15px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: theme.labelColor }}>
                       Availability Status:
                     </label>
                     <select
@@ -367,9 +399,10 @@ export default function AvailabilityManager() {
                         width: '100%',
                         padding: '8px',
                         fontSize: '14px',
-                        border: '1px solid #d1d5db',
+                        border: `1px solid ${theme.inputBorder}`,
                         borderRadius: '4px',
-                        backgroundColor: getStatusColor(dayAvailability.status)
+                        backgroundColor: getStatusColor(dayAvailability.status),
+                        color: theme.textPrimary
                       }}
                     >
                       <option value="">Select status...</option>
@@ -385,7 +418,7 @@ export default function AvailabilityManager() {
                   {(dayAvailability.status === 'green' || dayAvailability.status === 'yellow') && (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
                       <div>
-                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
+                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: theme.labelColor }}>
                           Earliest Start Time:
                         </label>
                         <input
@@ -396,13 +429,15 @@ export default function AvailabilityManager() {
                             width: '100%',
                             padding: '6px',
                             fontSize: '14px',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '4px'
+                            border: `1px solid ${theme.inputBorder}`,
+                            borderRadius: '4px',
+                            backgroundColor: theme.inputBg,
+                            color: theme.textPrimary
                           }}
                         />
                       </div>
                       <div>
-                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
+                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: theme.labelColor }}>
                           Latest End Time:
                         </label>
                         <input
@@ -413,8 +448,10 @@ export default function AvailabilityManager() {
                             width: '100%',
                             padding: '6px',
                             fontSize: '14px',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '4px'
+                            border: `1px solid ${theme.inputBorder}`,
+                            borderRadius: '4px',
+                            backgroundColor: theme.inputBg,
+                            color: theme.textPrimary
                           }}
                         />
                       </div>
@@ -423,7 +460,7 @@ export default function AvailabilityManager() {
 
                   {/* Notes */}
                   <div>
-                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
+                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: theme.labelColor }}>
                       Notes (optional):
                     </label>
                     <textarea
@@ -435,9 +472,11 @@ export default function AvailabilityManager() {
                         minHeight: '60px',
                         padding: '6px',
                         fontSize: '14px',
-                        border: '1px solid #d1d5db',
+                        border: `1px solid ${theme.inputBorder}`,
                         borderRadius: '4px',
-                        resize: 'vertical'
+                        resize: 'vertical',
+                        backgroundColor: theme.inputBg,
+                        color: theme.textPrimary
                       }}
                     />
                   </div>

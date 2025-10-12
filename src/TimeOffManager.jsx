@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { parseDate, formatDateDisplay, formatTimeDisplay, getDateRange, getDaysCount } from './dateUtils';
 import { useUser } from './UserContext-Minimal';
+import { theme } from './theme';
 
 export default function TimeOffManager() {
   const { userProfile, canManageEmployees } = useUser();
@@ -285,12 +286,12 @@ export default function TimeOffManager() {
           gap: '15px',
           marginBottom: '30px',
           padding: '15px',
-          backgroundColor: '#f9fafb',
+          backgroundColor: theme.cardBg,
           borderRadius: '8px',
           alignItems: 'end'
         }}>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px', color: theme.labelColor }}>
               Filter by Employee:
             </label>
             <select
@@ -300,8 +301,10 @@ export default function TimeOffManager() {
                 width: '100%',
                 padding: '8px',
                 fontSize: '14px',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px'
+                border: `1px solid ${theme.inputBorder}`,
+                borderRadius: '4px',
+                backgroundColor: theme.inputBg,
+                color: theme.textPrimary
               }}
             >
               <option value="all">All Employees</option>
@@ -355,36 +358,36 @@ export default function TimeOffManager() {
       }}>
         <div style={{
           padding: '15px',
-          backgroundColor: '#f0fdf4',
+          backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#166534' : '#f0fdf4',
           borderRadius: '8px',
           textAlign: 'center'
         }}>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#16a34a' }}>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#86efac' : '#16a34a' }}>
             {filteredRequests.length}
           </div>
-          <div style={{ fontSize: '14px', color: '#15803d' }}>Total Requests</div>
+          <div style={{ fontSize: '14px', color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#bbf7d0' : '#15803d' }}>Total Requests</div>
         </div>
         <div style={{
           padding: '15px',
-          backgroundColor: '#f0f9ff',
+          backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#075985' : '#f0f9ff',
           borderRadius: '8px',
           textAlign: 'center'
         }}>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0284c7' }}>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#7dd3fc' : '#0284c7' }}>
             {upcomingRequests.length}
           </div>
-          <div style={{ fontSize: '14px', color: '#0369a1' }}>Upcoming</div>
+          <div style={{ fontSize: '14px', color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#bae6fd' : '#0369a1' }}>Upcoming</div>
         </div>
         <div style={{
           padding: '15px',
-          backgroundColor: '#fef3c7',
+          backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#854d0e' : '#fef3c7',
           borderRadius: '8px',
           textAlign: 'center'
         }}>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#92400e' }}>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fde68a' : '#92400e' }}>
             {pastRequests.length}
           </div>
-          <div style={{ fontSize: '14px', color: '#78350f' }}>Past</div>
+          <div style={{ fontSize: '14px', color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fef3c7' : '#78350f' }}>Past</div>
         </div>
       </div>
 
@@ -392,12 +395,12 @@ export default function TimeOffManager() {
         <div style={{
           textAlign: 'center',
           padding: '40px',
-          backgroundColor: '#f9fafb',
+          backgroundColor: theme.cardBg,
           borderRadius: '8px',
-          color: '#6b7280'
+          color: theme.textSecondary
         }}>
           <div style={{ fontSize: '48px', marginBottom: '10px' }}>📅</div>
-          <div style={{ fontSize: '18px', marginBottom: '5px' }}>No time-off requests found</div>
+          <div style={{ fontSize: '18px', marginBottom: '5px', color: theme.textPrimary }}>No time-off requests found</div>
           <div style={{ fontSize: '14px' }}>
             {!canManageEmployees() && !userProfile?.employee_id 
               ? 'Your account is not linked to an employee. Please contact an administrator.'
@@ -498,22 +501,22 @@ function RequestCard({
   const isEditing = editingRequest === request.id;
   return (
     <div style={{
-      border: '1px solid #e5e7eb',
+      border: `1px solid ${theme.border}`,
       borderRadius: '8px',
       padding: '20px',
-      backgroundColor: isPast ? '#f9fafb' : 'white',
+      backgroundColor: isPast ? theme.bgSecondary : theme.cardBg,
       opacity: isPast ? 0.8 : 1
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '15px' }}>
         <div>
-          <h4 style={{ margin: '0 0 5px 0', color: '#374151' }}>
+          <h4 style={{ margin: '0 0 5px 0', color: theme.textPrimary }}>
             {request.employees.display_name || request.employees.full_name}
             {request.isRecurringParent && (
               <span style={{
                 marginLeft: '8px',
                 padding: '2px 8px',
-                backgroundColor: '#e0e7ff',
-                color: '#3730a3',
+                backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#4338ca' : '#e0e7ff',
+                color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#c7d2fe' : '#3730a3',
                 borderRadius: '4px',
                 fontSize: '12px',
                 fontWeight: 'bold'
@@ -522,7 +525,7 @@ function RequestCard({
               </span>
             )}
           </h4>
-          <div style={{ fontSize: '14px', color: '#6b7280' }}>
+          <div style={{ fontSize: '14px', color: theme.textSecondary }}>
             {request.employees.position}
           </div>
         </div>
@@ -673,8 +676,12 @@ function RequestCard({
           <strong>⏰ Type:</strong>
           <span style={{
             padding: '2px 8px',
-            backgroundColor: request.request_type === 'full_days' ? '#fef3c7' : '#ecfdf5',
-            color: request.request_type === 'full_days' ? '#92400e' : '#065f46',
+            backgroundColor: request.request_type === 'full_days' 
+              ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? '#854d0e' : '#fef3c7')
+              : (window.matchMedia('(prefers-color-scheme: dark)').matches ? '#166534' : '#ecfdf5'),
+            color: request.request_type === 'full_days' 
+              ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fde68a' : '#92400e')
+              : (window.matchMedia('(prefers-color-scheme: dark)').matches ? '#86efac' : '#065f46'),
             borderRadius: '4px',
             fontSize: '12px',
             fontWeight: 'bold'
@@ -682,7 +689,7 @@ function RequestCard({
             {request.request_type === 'full_days' ? 'Full Day(s)' : 'Partial Day'}
           </span>
           {request.request_type === 'partial_day' && (
-            <span>
+            <span style={{ color: theme.textPrimary }}>
               Available: {formatTime(request.partial_start_time)} - {formatTime(request.partial_end_time)}
             </span>
           )}
@@ -690,8 +697,8 @@ function RequestCard({
 
         {request.reason && !isEditing && (
           <div style={{ display: 'flex', alignItems: 'start', gap: '10px' }}>
-            <strong>💬 Reason:</strong>
-            <span style={{ flex: 1 }}>{request.reason}</span>
+            <strong style={{ color: theme.textPrimary }}>💬 Reason:</strong>
+            <span style={{ flex: 1, color: theme.textPrimary }}>{request.reason}</span>
           </div>
         )}
 
@@ -705,7 +712,7 @@ function RequestCard({
             <h4 style={{ margin: '0 0 15px 0', color: '#92400e' }}>Edit Request</h4>
             
             <div style={{ display: 'grid', gap: '15px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: 'bold' }}>
                     Start Date:
@@ -760,7 +767,7 @@ function RequestCard({
               </div>
 
               {editForm.request_type === 'partial_day' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
                   <div>
                     <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: 'bold' }}>
                       Available From:

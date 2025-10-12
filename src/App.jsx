@@ -14,6 +14,7 @@ import UserManagement from './UserManagement'
 import DatabaseTest from './DatabaseTest'
 import { UserProvider, useUser } from './UserContext-Minimal'
 import './App.css'
+import './theme-utils.css'
 
 function AppContent() {
   const { user, userProfile, loading: userLoading, canManageEmployees, canManageUserAccounts } = useUser()
@@ -96,14 +97,30 @@ function AppContent() {
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1>Staff Scheduling System</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+    <div style={{ 
+      padding: '1rem', 
+      maxWidth: '1200px', 
+      margin: '0 auto',
+      minHeight: '100vh',
+      backgroundColor: 'var(--bg-primary)',
+      color: 'var(--text-primary)'
+    }}>
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'row',
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginBottom: '1.5rem',
+        gap: '1rem',
+        flexWrap: 'wrap'
+      }}>
+        <h1 style={{ fontSize: 'clamp(1.5rem, 4vw, 2rem)', margin: '0' }}>Staff Scheduling System</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           <span style={{ 
             padding: '0.25rem 0.5rem',
             borderRadius: '4px',
             fontSize: '0.875rem',
+            whiteSpace: 'nowrap',
             backgroundColor: 
               effectiveUserProfile?.user_role === 'admin' ? '#dbeafe' : 
               effectiveUserProfile?.user_role === 'owner' ? '#fce7f3' :
@@ -116,7 +133,7 @@ function AppContent() {
             {effectiveUserProfile?.user_role?.charAt(0).toUpperCase() + effectiveUserProfile?.user_role?.slice(1)}
             {!userProfile && ' (Default)'}
           </span>
-          <span>Welcome, {effectiveUserProfile?.full_name || user.email}</span>
+          <span style={{ fontSize: 'clamp(0.875rem, 2vw, 1rem)' }}>Welcome, {effectiveUserProfile?.full_name || user.email}</span>
           <button
             onClick={handleSignOut}
             style={{
@@ -125,7 +142,9 @@ function AppContent() {
               color: 'white',
               border: 'none',
               borderRadius: '4px',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontSize: 'clamp(0.875rem, 2vw, 1rem)',
+              whiteSpace: 'nowrap'
             }}
           >
             Sign Out
@@ -135,10 +154,12 @@ function AppContent() {
 
       {/* Navigation Tabs */}
       <div style={{ 
-        borderBottom: '2px solid #e5e7eb',
-        marginBottom: '2rem'
+        borderBottom: '2px solid var(--border-color)',
+        marginBottom: '1.5rem',
+        overflowX: 'auto',
+        WebkitOverflowScrolling: 'touch'
       }}>
-        <div style={{ display: 'flex', gap: '0', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0', flexWrap: 'nowrap', minWidth: 'min-content' }}>
           {getNavigationTabs().map(tab => (
             <button
               key={tab.key}
@@ -147,21 +168,22 @@ function AppContent() {
                 if (tab.key !== 'employees') setShowAddForm(false);
               }}
               style={{
-                padding: '1rem 1.5rem',
+                padding: 'clamp(0.5rem, 2vw, 1rem) clamp(0.75rem, 3vw, 1.5rem)',
                 backgroundColor: activeTab === tab.key ? '#3b82f6' : 'transparent',
-                color: activeTab === tab.key ? 'white' : '#374151',
+                color: activeTab === tab.key ? 'white' : 'var(--text-primary)',
                 border: 'none',
                 borderBottom: activeTab === tab.key ? '2px solid #3b82f6' : '2px solid transparent',
                 cursor: 'pointer',
-                fontSize: '1rem',
+                fontSize: 'clamp(0.875rem, 2vw, 1rem)',
                 fontWeight: activeTab === tab.key ? 'bold' : 'normal',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.5rem'
+                gap: '0.5rem',
+                whiteSpace: 'nowrap'
               }}
             >
-              <span>{tab.icon}</span>
-              {tab.label}
+              <span className="tab-icon">{tab.icon}</span>
+              <span className="tab-label">{tab.label}</span>
             </button>
           ))}
         </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabase'
 import { useUser } from './UserContext-Minimal'
+import { theme } from './theme'
 
 function EmployeeList() {
   const { canManageEmployees } = useUser()
@@ -226,24 +227,26 @@ function EmployeeList() {
   return (
     <div>
       <h2>Staff Directory</h2>
-      {employees.length === 0 && <p>No employees found.</p>}
+      {employees.length === 0 && <p style={{ color: theme.textPrimary }}>No employees found.</p>}
       <div style={{ display: 'grid', gap: '1rem', marginTop: '1rem' }}>
         {employees.map((employee) => (
           <div 
             key={employee.id} 
             style={{ 
-              border: '1px solid #ccc', 
+              border: `1px solid ${theme.border}`, 
               padding: '1rem', 
               borderRadius: '8px',
-              backgroundColor: editingEmployee === employee.id ? '#fff3cd' : '#f9f9f9'
+              backgroundColor: editingEmployee === employee.id 
+                ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? '#854d0e' : '#fff3cd')
+                : theme.cardBg
             }}
           >
             {editingEmployee === employee.id ? (
               // Edit Mode
               <div>
-                <h3 style={{ marginBottom: '1rem', color: '#856404' }}>Editing Employee</h3>
+                <h3 style={{ marginBottom: '1rem', color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fde68a' : '#856404' }}>Editing Employee</h3>
                 <div style={{ display: 'grid', gap: '1rem' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                     <div>
                       <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
                         Full Name:
@@ -268,7 +271,7 @@ function EmployeeList() {
                     </div>
                   </div>
                   
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                     <div>
                       <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
                         Position:
@@ -300,7 +303,7 @@ function EmployeeList() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                     <div>
                       <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
                         Email:
@@ -325,7 +328,7 @@ function EmployeeList() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
                     <div>
                       <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
                         Min Hours/Week:
