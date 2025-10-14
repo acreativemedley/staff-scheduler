@@ -58,7 +58,6 @@ function EmployeeList() {
       [field]: value
     }))
   }
-
   const saveEmployee = async () => {
     try {
       // Auto-set role based on position
@@ -73,143 +72,131 @@ function EmployeeList() {
         .eq('id', editingEmployee)
 
       if (error) {
-        alert('Error updating employee: ' + error.message)
-      } else {
-        setEditingEmployee(null)
-        setEditForm({})
-        fetchEmployees() // Refresh the list
+        console.error('Error saving employee:', error)
+        alert('Error saving employee: ' + error.message)
+        return
       }
+
+      setEditingEmployee(null)
+      setEditForm({})
+      fetchEmployees()
     } catch (err) {
-      alert('Failed to update employee')
+      console.error('saveEmployee catch error:', err)
+      alert('Failed to save employee: ' + err.message)
     }
   }
 
-  const deleteEmployee = async (employeeId, employeeName) => {
-    console.log('DELETE FUNCTION CALLED - START');
-    
-    if (window.confirm(`Are you sure you want to delete ${employeeName}? This will also delete all their schedules, availability, and time-off requests. This cannot be undone.`)) {
-      console.log('User confirmed delete');
-      try {
-        console.log('Attempting to delete employee:', employeeId, employeeName);
-        console.log('Employee ID type:', typeof employeeId);
-        
-        // First, let's verify the employee exists
-        const { data: checkData, error: checkError } = await supabase
-          .from('employees')
-          .select('id, full_name')
-          .eq('id', employeeId);
-          
-        console.log('Employee exists check:', { checkData, checkError });
-        
-        if (checkError) {
-          console.error('Error checking employee exists:', checkError);
-          alert('Error checking employee: ' + checkError.message);
-          return;
-        }
-        
-        if (!checkData || checkData.length === 0) {
-          console.error('Employee not found with ID:', employeeId);
-          alert('Employee not found. The list may be out of date.');
-          fetchEmployees(); // Refresh the list
-          return;
-        }
+  const deleteEmployee = async (employeeId, fullName) => {
+    if (!confirm(`Delete ${fullName}? This will remove related schedules and data.`)) return;
+    try {
+      console.log('Checking employee exists before delete:', employeeId)
+      const { data: checkData, error: checkError } = await supabase
+        .from('employees')
+        .select('id, full_name')
+        .eq('id', employeeId)
 
-        // Delete all related records first to avoid foreign key constraints
-        console.log('Deleting related records...');
+      console.log('Employee exists check:', { checkData, checkError });
 
-        // Delete from base_schedule first
-        const { error: baseScheduleError } = await supabase
-          .from('base_schedule')
-          .delete()
-          .eq('employee_id', employeeId);
-        
-        if (baseScheduleError) {
-          console.log('Error deleting base schedule (may not exist):', baseScheduleError);
-        } else {
-          console.log('Deleted employee base schedule');
-        }
-
-        // Delete from weekly_schedules
-        const { error: scheduleError } = await supabase
-          .from('weekly_schedules')
-          .delete()
-          .eq('employee_id', employeeId);
-        
-        if (scheduleError) {
-          console.log('Error deleting schedules (may not exist):', scheduleError);
-        } else {
-          console.log('Deleted employee schedules');
-        }
-
-        // Delete from employee_availability
-        const { error: availError } = await supabase
-          .from('employee_availability')
-          .delete()
-          .eq('employee_id', employeeId);
-        
-        if (availError) {
-          console.log('Error deleting availability (may not exist):', availError);
-        } else {
-          console.log('Deleted employee availability');
-        }
-
-        // Delete from time_off_requests (both as employee and as reviewer)
-        const { error: timeoffError } = await supabase
-          .from('time_off_requests')
-          .delete()
-          .or(`employee_id.eq.${employeeId},reviewed_by.eq.${employeeId}`);
-        
-        if (timeoffError) {
-          console.log('Error deleting time-off requests (may not exist):', timeoffError);
-        } else {
-          console.log('Deleted employee time-off requests');
-        }
-        
-        // Now try to delete the employee
-        console.log('Deleting employee record...');
-        
-        // Let's check one more time that the employee still exists after cleanup
-        const { data: finalCheckData } = await supabase
-          .from('employees')
-          .select('id, full_name')
-          .eq('id', employeeId);
-        console.log('Final employee exists check before delete:', finalCheckData);
-        
-        const { data, error } = await supabase
-          .from('employees')
-          .delete()
-          .eq('id', employeeId)
-          .select();
-
-        console.log('Final delete result:', { data, error });
-        console.log('Final delete - Rows affected:', data?.length || 0);
-
-        if (error) {
-          console.error('Final supabase delete error:', error);
-          console.error('Error details:', error.details, error.hint, error.code);
-          alert('Error deleting employee: ' + error.message + (error.details ? '\nDetails: ' + error.details : ''));
-        } else if (!data || data.length === 0) {
-          console.error('Final delete - No rows were deleted. Employee may not exist or permission denied.');
-          console.log('This is likely due to Row Level Security (RLS) policies in Supabase.');
-          console.log('The employee exists but RLS is preventing deletion.');
-          
-          // Let's try to understand the RLS issue by checking what user we're authenticated as
-          const { data: userData, error: userError } = await supabase.auth.getUser();
-          console.log('Current authenticated user:', userData);
-          console.log('User error:', userError);
-          
-          alert('Unable to delete employee. This appears to be due to database Row Level Security policies.\n\n' +
-                'The employee exists but the database is preventing deletion. ' +
-                'Please check your Supabase RLS policies for the employees table.');
-        } else {
-          console.log('Employee deleted successfully:', data);
-          alert('Employee and all related records deleted successfully');
-          fetchEmployees(); // Refresh the list
-        }
-      } catch (err) {
-        console.error('Delete employee catch error:', err);
-        alert('Failed to delete employee: ' + err.message);
+      if (checkError) {
+        console.error('Error checking employee exists:', checkError);
+        alert('Error checking employee: ' + checkError.message);
+        return;
       }
+
+      if (!checkData || checkData.length === 0) {
+        console.error('Employee not found with ID:', employeeId);
+        alert('Employee not found. The list may be out of date.');
+        fetchEmployees(); // Refresh the list
+        return;
+      }
+
+      // Delete all related records first to avoid foreign key constraints
+      console.log('Deleting related records...');
+
+      // Delete from base_schedule first
+      const { error: baseScheduleError } = await supabase
+        .from('base_schedule')
+        .delete()
+        .eq('employee_id', employeeId);
+
+      if (baseScheduleError) {
+        console.log('Error deleting base schedule (may not exist):', baseScheduleError);
+      } else {
+        console.log('Deleted employee base schedule');
+      }
+
+      // Delete from weekly_schedules
+      const { error: scheduleError } = await supabase
+        .from('weekly_schedules')
+        .delete()
+        .eq('employee_id', employeeId);
+
+      if (scheduleError) {
+        console.log('Error deleting schedules (may not exist):', scheduleError);
+      } else {
+        console.log('Deleted employee schedules');
+      }
+
+      // Delete from employee_availability
+      const { error: availError } = await supabase
+        .from('employee_availability')
+        .delete()
+        .eq('employee_id', employeeId);
+
+      if (availError) {
+        console.log('Error deleting availability (may not exist):', availError);
+      } else {
+        console.log('Deleted employee availability');
+      }
+
+      // Delete from time_off_requests (both as employee and as reviewer)
+      const { error: timeoffError } = await supabase
+        .from('time_off_requests')
+        .delete()
+        .or(`employee_id.eq.${employeeId},reviewed_by.eq.${employeeId}`);
+
+      if (timeoffError) {
+        console.log('Error deleting time-off requests (may not exist):', timeoffError);
+      } else {
+        console.log('Deleted employee time-off requests');
+      }
+
+      // Now try to delete the employee
+      console.log('Deleting employee record...');
+
+      const { data, error } = await supabase
+        .from('employees')
+        .delete()
+        .eq('id', employeeId)
+        .select();
+
+      console.log('Final delete result:', { data, error });
+
+      if (error) {
+        console.error('Final supabase delete error:', error);
+        console.error('Error details:', error.details, error.hint, error.code);
+        alert('Error deleting employee: ' + error.message + (error.details ? '\nDetails: ' + error.details : ''));
+      } else if (!data || data.length === 0) {
+        console.error('Final delete - No rows were deleted. Employee may not exist or permission denied.');
+        console.log('This is likely due to Row Level Security (RLS) policies in Supabase.');
+        console.log('The employee exists but RLS is preventing deletion.');
+        
+        // Let's try to understand the RLS issue by checking what user we're authenticated as
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        console.log('Current authenticated user:', userData);
+        console.log('User error:', userError);
+        
+        alert('Unable to delete employee. This appears to be due to database Row Level Security policies.\n\n' +
+              'The employee exists but the database is preventing deletion. ' +
+              'Please check your Supabase RLS policies for the employees table.');
+      } else {
+        console.log('Employee deleted successfully:', data);
+        alert('Employee and all related records deleted successfully');
+        fetchEmployees(); // Refresh the list
+      }
+    } catch (err) {
+      console.error('Delete employee catch error:', err);
+      alert('Failed to delete employee: ' + err.message);
     }
   }
 
@@ -236,15 +223,13 @@ function EmployeeList() {
               border: `1px solid ${theme.border}`, 
               padding: '1rem', 
               borderRadius: '8px',
-              backgroundColor: editingEmployee === employee.id 
-                ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? '#854d0e' : '#fff3cd')
-                : theme.cardBg
+              backgroundColor: editingEmployee === employee.id ? theme.warningBg : theme.cardBg
             }}
           >
             {editingEmployee === employee.id ? (
               // Edit Mode
               <div>
-                <h3 style={{ marginBottom: '1rem', color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fde68a' : '#856404' }}>Editing Employee</h3>
+                <h3 style={{ marginBottom: '1rem', color: theme.warningText }}>Editing Employee</h3>
                 <div style={{ display: 'grid', gap: '1rem' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                     <div>
@@ -255,7 +240,7 @@ function EmployeeList() {
                         type="text"
                         value={editForm.full_name || ''}
                         onChange={(e) => handleEditChange('full_name', e.target.value)}
-                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', backgroundColor: theme.inputBg, border: `1px solid ${theme.inputBorder}`, color: theme.textPrimary }}
                       />
                     </div>
                     <div>
@@ -266,7 +251,7 @@ function EmployeeList() {
                         type="text"
                         value={editForm.display_name || ''}
                         onChange={(e) => handleEditChange('display_name', e.target.value)}
-                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', backgroundColor: theme.inputBg, border: `1px solid ${theme.inputBorder}`, color: theme.textPrimary }}
                       />
                     </div>
                   </div>
@@ -279,7 +264,7 @@ function EmployeeList() {
                       <select
                         value={editForm.position || ''}
                         onChange={(e) => handleEditChange('position', e.target.value)}
-                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', backgroundColor: theme.inputBg, border: `1px solid ${theme.inputBorder}`, color: theme.textPrimary }}
                       >
                         <option value="Sales Floor">Sales Floor</option>
                         <option value="Teacher">Teacher</option>
@@ -295,7 +280,7 @@ function EmployeeList() {
                       <select
                         value={editForm.is_active ? 'active' : 'inactive'}
                         onChange={(e) => handleEditChange('is_active', e.target.value === 'active')}
-                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', backgroundColor: theme.inputBg, border: `1px solid ${theme.inputBorder}`, color: theme.textPrimary }}
                       >
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
@@ -312,7 +297,7 @@ function EmployeeList() {
                         type="email"
                         value={editForm.email || ''}
                         onChange={(e) => handleEditChange('email', e.target.value)}
-                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', backgroundColor: theme.inputBg, border: `1px solid ${theme.inputBorder}`, color: theme.textPrimary }}
                       />
                     </div>
                     <div>
@@ -323,7 +308,7 @@ function EmployeeList() {
                         type="tel"
                         value={editForm.phone || ''}
                         onChange={(e) => handleEditChange('phone', e.target.value)}
-                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', backgroundColor: theme.inputBg, border: `1px solid ${theme.inputBorder}`, color: theme.textPrimary }}
                       />
                     </div>
                   </div>
@@ -339,7 +324,7 @@ function EmployeeList() {
                         max="40"
                         value={editForm.minimum_hours_per_week || ''}
                         onChange={(e) => handleEditChange('minimum_hours_per_week', e.target.value ? parseInt(e.target.value) : null)}
-                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', backgroundColor: theme.inputBg, border: `1px solid ${theme.inputBorder}`, color: theme.textPrimary }}
                       />
                     </div>
                     <div>
@@ -352,7 +337,7 @@ function EmployeeList() {
                         max="40"
                         value={editForm.preferred_hours_per_week || ''}
                         onChange={(e) => handleEditChange('preferred_hours_per_week', e.target.value ? parseInt(e.target.value) : null)}
-                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', backgroundColor: theme.inputBg, border: `1px solid ${theme.inputBorder}`, color: theme.textPrimary }}
                       />
                     </div>
                     <div>
@@ -365,7 +350,7 @@ function EmployeeList() {
                         max="40"
                         value={editForm.maximum_hours_per_week || ''}
                         onChange={(e) => handleEditChange('maximum_hours_per_week', e.target.value ? parseInt(e.target.value) : null)}
-                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', backgroundColor: theme.inputBg, border: `1px solid ${theme.inputBorder}`, color: theme.textPrimary }}
                       />
                     </div>
                   </div>
@@ -378,7 +363,7 @@ function EmployeeList() {
                       value={editForm.notes || ''}
                       onChange={(e) => handleEditChange('notes', e.target.value)}
                       rows="3"
-                      style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+                      style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', backgroundColor: theme.inputBg, border: `1px solid ${theme.inputBorder}`, color: theme.textPrimary }}
                     />
                   </div>
 
@@ -387,8 +372,8 @@ function EmployeeList() {
                       onClick={cancelEditing}
                       style={{
                         padding: '0.5rem 1rem',
-                        backgroundColor: '#6c757d',
-                        color: 'white',
+                        backgroundColor: theme.bgTertiary,
+                        color: theme.primaryText,
                         border: 'none',
                         borderRadius: '4px',
                         cursor: 'pointer'
@@ -400,8 +385,8 @@ function EmployeeList() {
                       onClick={saveEmployee}
                       style={{
                         padding: '0.5rem 1rem',
-                        backgroundColor: '#28a745',
-                        color: 'white',
+                        backgroundColor: theme.success,
+                        color: theme.primaryText,
                         border: 'none',
                         borderRadius: '4px',
                         cursor: 'pointer'
@@ -423,8 +408,8 @@ function EmployeeList() {
                         onClick={() => startEditing(employee)}
                         style={{
                           padding: '0.25rem 0.5rem',
-                          backgroundColor: '#007bff',
-                          color: 'white',
+                          backgroundColor: theme.primary,
+                          color: theme.primaryText,
                           border: 'none',
                           borderRadius: '4px',
                           cursor: 'pointer',
@@ -437,8 +422,8 @@ function EmployeeList() {
                         onClick={() => deleteEmployee(employee.id, employee.full_name)}
                         style={{
                           padding: '0.25rem 0.5rem',
-                          backgroundColor: '#dc3545',
-                          color: 'white',
+                          backgroundColor: theme.danger,
+                          color: theme.primaryText,
                           border: 'none',
                           borderRadius: '4px',
                           cursor: 'pointer',
@@ -454,7 +439,7 @@ function EmployeeList() {
                 {employee.display_name && employee.display_name !== employee.full_name && (
                   <p><strong>Display Name:</strong> {employee.display_name}</p>
                 )}
-                <p><strong>Position:</strong> {employee.position} <span style={{ color: '#666' }}>({employee.role})</span></p>
+                <p><strong>Position:</strong> {employee.position} <span style={{ color: theme.textSecondary }}>({employee.role})</span></p>
                 <p><strong>Email:</strong> {employee.email}</p>
                 <p><strong>Phone:</strong> {employee.phone}</p>
                 <p><strong>Hours/Week:</strong> 
@@ -462,7 +447,7 @@ function EmployeeList() {
                 </p>
                 <p><strong>Status:</strong> 
                   <span style={{ 
-                    color: employee.is_active ? '#28a745' : '#dc3545',
+                    color: employee.is_active ? theme.successText : theme.dangerText,
                     fontWeight: 'bold'
                   }}>
                     {employee.is_active ? 'Active' : 'Inactive'}

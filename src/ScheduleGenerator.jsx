@@ -37,7 +37,29 @@ export default function ScheduleGenerator() {
   ];
 
   useEffect(() => {
+    console.log('ScheduleGenerator: Component mounted, initializing...');
     initializeData();
+    
+    // Listen for local time-off updates from TimeOffManager to refresh data
+    const onTimeOffUpdated = () => {
+      console.log('ScheduleGenerator: timeOffUpdated event received, refetching time-off requests');
+      fetchTimeOffRequests();
+    };
+    window.addEventListener('timeOffUpdated', onTimeOffUpdated);
+    
+    // Refresh time-off data when tab/window becomes visible (user returns to schedule)
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('ScheduleGenerator: Tab became visible, refreshing time-off data');
+        fetchTimeOffRequests();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      window.removeEventListener('timeOffUpdated', onTimeOffUpdated);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -59,6 +81,33 @@ export default function ScheduleGenerator() {
       fetchGoogleCalendarEvents(weekStart, weekEnd);
     }
   }, [currentWeek]);
+
+  // Fetch time-off requests (defined BEFORE initializeData so it's available)
+  const fetchTimeOffRequests = async () => {
+    const timestamp = Date.now();
+    console.log('ScheduleGenerator: Fetching time-off requests... (timestamp:', timestamp, ')');
+    
+    // Fetch all time-off requests with cache-busting timestamp
+    const { data, error } = await supabase
+      .from('time_off_requests')
+      .select('*')
+      .order('submitted_at', { ascending: false })
+      .limit(1000); // Force new query with limit
+    
+    if (error) {
+      console.error('ScheduleGenerator: Error fetching time off requests:', error);
+    } else {
+      console.log('✅ Fetched', data?.length || 0, 'time-off requests');
+      // Check for Lisa Sheldon's Oct 11 and Oct 25 requests
+      const lisaRequests = data.filter(r => 
+        (r.start_date === '2025-10-11' || r.start_date === '2025-10-25') &&
+        r.employee_id === '59ea0226-d0b0-4e8a-badd-ac1dd433b9ed'
+      );
+      console.log('🔍 Lisa Oct 11/25 in DB:', lisaRequests.length, 'requests');
+      // Force new array reference to trigger re-render
+      setTimeOffRequests([...data]);
+    }
+  };
 
   const initializeData = async () => {
     console.log('ScheduleGenerator: Starting initialization...')
@@ -129,19 +178,6 @@ export default function ScheduleGenerator() {
     }
   };
 
-  const fetchTimeOffRequests = async () => {
-    const { data, error } = await supabase
-      .from('time_off_requests')
-      .select('*')
-      .eq('status', 'approved');
-    
-    if (error) {
-      console.error('Error fetching time off requests:', error);
-    } else {
-      setTimeOffRequests(data || []);
-    }
-  };
-
   /**
    * Fetch Google Calendar events via CORS proxy
    * 
@@ -163,11 +199,7 @@ export default function ScheduleGenerator() {
    */
   const fetchGoogleCalendarEvents = async (startDate, endDate) => {
     try {
-      console.log('🔍 CALENDAR FETCH: Starting fetch for date range:', startDate, 'to', endDate);
-      
       const icalUrl = `https://calendar.google.com/calendar/ical/${encodeURIComponent(GOOGLE_CALENDAR_ID)}/public/basic.ics`;
-      console.log('🔍 CALENDAR FETCH: Calendar ID:', GOOGLE_CALENDAR_ID);
-      console.log('🔍 CALENDAR FETCH: iCal URL:', icalUrl);
       
       // Try multiple CORS proxies in order
       const proxies = [
@@ -178,16 +210,11 @@ export default function ScheduleGenerator() {
       
       for (const proxy of proxies) {
         try {
-          console.log(`🔍 CALENDAR FETCH: Trying ${proxy.name}...`);
-          console.log(`🔍 CALENDAR FETCH: Proxy URL:`, proxy.url);
-          
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
           
           const proxyResponse = await fetch(proxy.url, { signal: controller.signal });
           clearTimeout(timeoutId);
-          
-          console.log(`🔍 CALENDAR FETCH: ${proxy.name} response status:`, proxyResponse.status, proxyResponse.statusText);
           
           if (!proxyResponse.ok) {
             throw new Error(`${proxy.name} request failed with status ${proxyResponse.status}`);
@@ -198,44 +225,28 @@ export default function ScheduleGenerator() {
           if (proxy.direct) {
             // Direct response - text is the iCal data
             icalData = await proxyResponse.text();
-            console.log(`🔍 CALENDAR FETCH: ${proxy.name} returned direct iCal data, length:`, icalData.length);
           } else {
             // Wrapped response - need to extract contents
             const proxyData = await proxyResponse.json();
-            console.log(`🔍 CALENDAR FETCH: ${proxy.name} data keys:`, Object.keys(proxyData));
             
             if (!proxyData.contents) {
               throw new Error(`No contents in ${proxy.name} response`);
             }
             
             icalData = proxyData.contents;
-            console.log(`🔍 CALENDAR FETCH: ${proxy.name} iCal data length:`, icalData.length);
           }
-          
-          console.log('🔍 CALENDAR FETCH: First 500 characters:', icalData.substring(0, 500));
           
           // Check if the data is base64 encoded
           if (icalData.startsWith('data:text/calendar') && icalData.includes('base64,')) {
-            console.log('🔍 CALENDAR FETCH: Detected base64 encoded data, decoding...');
             const base64Data = icalData.split('base64,')[1];
             icalData = atob(base64Data);
-            console.log('🔍 CALENDAR FETCH: Successfully decoded base64 data, new length:', icalData.length);
           }
           
           const events = parseSimpleICS(icalData, startDate, endDate);
-          console.log('🔍 CALENDAR FETCH: Parsed iCal events:', events);
-          console.log('🔍 CALENDAR FETCH: Number of event dates:', Object.keys(events).length);
-          
-          if (Object.keys(events).length === 0) {
-            console.warn(`⚠️ CALENDAR FETCH: No events found in date range using ${proxy.name}. Calendar might be empty.`);
-          }
-          
           setCalendarEvents(events);
-          console.log(`✅ CALENDAR FETCH: Successfully loaded events using ${proxy.name}`);
           return; // Success! Exit function
           
         } catch (proxyError) {
-          console.warn(`⚠️ CALENDAR FETCH: ${proxy.name} failed:`, proxyError.message);
           // Continue to next proxy
         }
       }
@@ -244,12 +255,7 @@ export default function ScheduleGenerator() {
       throw new Error('All CORS proxy methods failed');
 
     } catch (error) {
-      console.error('❌ CALENDAR FETCH ERROR: All methods failed to fetch calendar events');
-      console.error('❌ Error type:', error.constructor.name);
-      console.error('❌ Error message:', error.message);
-      console.error('❌ Full error:', error);
-      console.log('⚠️ CALENDAR FETCH: Using empty calendar (no mock data)...');
-      
+      console.error('❌ Calendar fetch failed:', error.message);
       // Set empty calendar events instead of mock data
       setCalendarEvents({});
       console.warn('⚠️ Unable to load Google Calendar events. Please check:\n' +
@@ -420,35 +426,39 @@ export default function ScheduleGenerator() {
     // Handle both Date objects and date strings
     const dateStr = date instanceof Date ? formatDateForInput(date) : date;
     
-    console.log(`\n🔍 isEmployeeOnTimeOff: Checking employee ${employeeId} for date ${dateStr}`);
-    console.log(`   Original date input:`, date);
-    console.log(`   Converted to string:`, dateStr);
+    // Special logging for Lisa on Oct 11 and Oct 25
+    const isLisa = employeeId === '59ea0226-d0b0-4e8a-badd-ac1dd433b9ed';
+    const isTargetDate = dateStr === '2025-10-11' || dateStr === '2025-10-25';
+    
+    if (isLisa && isTargetDate) {
+      console.log(`\n🚨 LISA SHELDON CHECK: Date ${dateStr}`);
+      console.log(`   Total timeOffRequests in state:`, timeOffRequests.length);
+      const lisaRequests = timeOffRequests.filter(r => r.employee_id === employeeId);
+      console.log(`   Lisa's time-off requests:`, lisaRequests.length);
+      console.log(`   Lisa's request details:`, lisaRequests.map(r => ({
+        id: r.id,
+        start: r.start_date,
+        end: r.end_date,
+        type: r.request_type
+      })));
+    }
     
     const result = timeOffRequests.some(request => {
       if (request.employee_id !== employeeId) return false;
-      
-      console.log(`   📋 Checking request: ${request.start_date} to ${request.end_date} (type: ${request.request_type})`);
       
       const startDate = parseDate(request.start_date);
       const endDate = parseDate(request.end_date);
       const checkDate = parseDate(dateStr);
       
-      console.log(`   📅 Parsed dates: start=${startDate.toDateString()}, end=${endDate.toDateString()}, check=${checkDate.toDateString()}`);
-      
       if (request.request_type === 'full_days') {
-        const isInRange = isDateInRange(checkDate, startDate, endDate);
-        console.log(`   📅 Full day check: ${checkDate.toDateString()} between ${startDate.toDateString()} and ${endDate.toDateString()} = ${isInRange}`);
-        return isInRange;
+        return isDateInRange(checkDate, startDate, endDate);
       } else if (request.request_type === 'partial_day') {
-        const isSame = isSameDay(checkDate, startDate);
-        console.log(`   📅 Partial day check: ${checkDate.toDateString()} === ${startDate.toDateString()} = ${isSame}`);
-        return isSame;
+        return isSameDay(checkDate, startDate);
       }
       
       return false;
     });
     
-    console.log(`   🎯 Final result for employee ${employeeId} on ${dateStr}: ${result}`);
     return result;
   };
 
@@ -583,17 +593,13 @@ export default function ScheduleGenerator() {
       };
     });
 
-    console.log('Schedule keys initialized:', Object.keys(schedule));
-
     // Add shifts from weekly schedule data
     let addedShifts = 0;
     weeklyScheduleData.forEach(entry => {
       const dateKey = entry.schedule_date;
-      console.log(`Processing entry: ${dateKey} for employee ${entry.employee_id}`);
       
       if (schedule[dateKey]) {
         const employee = employees.find(emp => emp.id === entry.employee_id);
-        console.log(`Found employee for ${entry.employee_id}:`, employee?.full_name);
         
         if (employee) {
           const hasFullDayTimeOff = isEmployeeOnFullDayTimeOff(employee.id, dateKey);
@@ -612,16 +618,11 @@ export default function ScheduleGenerator() {
             weeklyScheduleId: entry.id
           });
           addedShifts++;
-        } else {
-          console.warn(`Employee not found for ID: ${entry.employee_id}`);
         }
-      } else {
-        console.warn(`Schedule date ${dateKey} not found in initialized schedule`);
       }
     });
 
-    console.log(`Added ${addedShifts} shifts to schedule`);
-    console.log('Final schedule:', schedule);
+    console.log(`✅ Built schedule with ${addedShifts} shifts`);
     setWeeklySchedule(schedule);
   };
 
@@ -830,9 +831,9 @@ export default function ScheduleGenerator() {
       
       return {
         status: 'unavailable',
-        color: '#fef2f2',
-        borderColor: '#fecaca',
-        textColor: '#dc2626',
+        color: theme.dangerBg,
+        borderColor: theme.dangerBorder,
+        textColor: theme.dangerText,
         explanation: timeOffRequest?.reason || 'Full day time off'
       };
     }
@@ -842,18 +843,18 @@ export default function ScheduleGenerator() {
       const endTime = partialTimeOff.partial_end_time;
       return {
         status: 'partial',
-        color: '#fffbeb',
-        borderColor: '#fed7aa',
-        textColor: '#d97706',
+        color: theme.warningBg,
+        borderColor: theme.warningBorder,
+        textColor: theme.warningText,
         explanation: `Partial time off: ${startTime}-${endTime}${partialTimeOff.reason ? ` (${partialTimeOff.reason})` : ''}`
       };
     }
     
     return {
       status: 'available',
-      color: '#f0fdf4',
-      borderColor: '#bbf7d0',
-      textColor: '#16a34a',
+      color: theme.successBg,
+      borderColor: theme.successBorder,
+      textColor: theme.successText,
       explanation: 'Available'
     };
   };
@@ -1315,10 +1316,6 @@ export default function ScheduleGenerator() {
     );
   }
 
-  // Debug display
-  console.log('ScheduleGenerator: Rendering with employees:', employees.length)
-  console.log('ScheduleGenerator: Employees:', employees)
-
   if (!currentWeek) {
     return (
       <div style={{ padding: '20px', textAlign: 'center' }}>
@@ -1362,8 +1359,8 @@ export default function ScheduleGenerator() {
           onClick={() => setViewMode('week')}
           style={{
             padding: '8px 16px',
-            backgroundColor: viewMode === 'week' ? '#3b82f6' : theme.bgSecondary,
-            color: viewMode === 'week' ? 'white' : theme.textPrimary,
+            backgroundColor: viewMode === 'week' ? theme.primary : theme.bgSecondary,
+            color: viewMode === 'week' ? theme.primaryText : theme.textPrimary,
             border: 'none',
             borderRadius: '6px',
             cursor: 'pointer',
@@ -1376,8 +1373,8 @@ export default function ScheduleGenerator() {
           onClick={() => setViewMode('month')}
           style={{
             padding: '8px 16px',
-            backgroundColor: viewMode === 'month' ? '#3b82f6' : theme.bgSecondary,
-            color: viewMode === 'month' ? 'white' : theme.textPrimary,
+            backgroundColor: viewMode === 'month' ? theme.primary : theme.bgSecondary,
+            color: viewMode === 'month' ? theme.primaryText : theme.textPrimary,
             border: 'none',
             borderRadius: '6px',
             cursor: 'pointer',
@@ -1403,8 +1400,8 @@ export default function ScheduleGenerator() {
             onClick={() => changeWeek(-1)}
             style={{
               padding: '8px 16px',
-              backgroundColor: '#6b7280',
-              color: 'white',
+              backgroundColor: theme.bgTertiary,
+              color: theme.textPrimary,
               border: 'none',
               borderRadius: '4px',
               cursor: 'pointer'
@@ -1441,8 +1438,8 @@ export default function ScheduleGenerator() {
               onClick={printWeek}
               style={{
                 padding: '8px 16px',
-                backgroundColor: '#16a34a',
-                color: 'white',
+                backgroundColor: theme.success,
+                color: theme.primaryText,
                 border: 'none',
                 borderRadius: '4px',
                 cursor: 'pointer'
@@ -1456,8 +1453,8 @@ export default function ScheduleGenerator() {
             onClick={() => changeWeek(1)}
             style={{
               padding: '8px 16px',
-              backgroundColor: '#6b7280',
-              color: 'white',
+              backgroundColor: theme.bgTertiary,
+              color: theme.textPrimary,
               border: 'none',
               borderRadius: '4px',
               cursor: 'pointer'
@@ -1480,8 +1477,8 @@ export default function ScheduleGenerator() {
             onClick={() => changeMonth(-1)}
             style={{
               padding: '8px 16px',
-              backgroundColor: '#6b7280',
-              color: 'white',
+              backgroundColor: theme.bgTertiary,
+              color: theme.textPrimary,
               border: 'none',
               borderRadius: '4px',
               cursor: 'pointer'
@@ -1518,8 +1515,8 @@ export default function ScheduleGenerator() {
               onClick={printMonth}
               style={{
                 padding: '8px 16px',
-                backgroundColor: '#16a34a',
-                color: 'white',
+                backgroundColor: theme.success,
+                color: theme.primaryText,
                 border: 'none',
                 borderRadius: '4px',
                 cursor: 'pointer'
@@ -1533,8 +1530,8 @@ export default function ScheduleGenerator() {
             onClick={() => changeMonth(1)}
             style={{
               padding: '8px 16px',
-              backgroundColor: '#6b7280',
-              color: 'white',
+              backgroundColor: theme.bgTertiary,
+              color: theme.textPrimary,
               border: 'none',
               borderRadius: '4px',
               cursor: 'pointer'
@@ -1556,8 +1553,8 @@ export default function ScheduleGenerator() {
             disabled={saving}
             style={{
               padding: '12px 24px',
-              backgroundColor: saving ? '#9ca3af' : '#16a34a',
-              color: 'white',
+              backgroundColor: saving ? theme.bgTertiary : theme.success,
+              color: theme.primaryText,
               border: 'none',
               borderRadius: '6px',
               cursor: saving ? 'not-allowed' : 'pointer',
@@ -1578,9 +1575,9 @@ export default function ScheduleGenerator() {
           borderRadius: '6px',
           textAlign: 'center',
           marginBottom: '20px',
-          backgroundColor: message.includes('Error') ? '#fef2f2' : '#f0fdf4',
-          color: message.includes('Error') ? '#dc2626' : '#16a34a',
-          border: `1px solid ${message.includes('Error') ? '#fecaca' : '#bbf7d0'}`,
+          backgroundColor: message.includes('Error') ? theme.cardBg : theme.bgPrimary,
+          color: message.includes('Error') ? theme.danger : theme.success,
+          border: `1px solid ${message.includes('Error') ? theme.borderLight : theme.border}`,
           fontWeight: 'bold'
         }}>
           {message}
@@ -1707,22 +1704,22 @@ export default function ScheduleGenerator() {
                               fontSize: '11px',
                               padding: '6px 8px',
                               margin: '4px 0',
-                              backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#854d0e' : '#fef3c7',
-                              border: '1px solid #f59e0b',
+                              backgroundColor: theme.bgSecondary,
+                              border: `1px solid ${theme.borderLight}`,
                               borderRadius: '4px',
-                              color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fef3c7' : '#92400e'
+                              color: theme.textPrimary
                             }}
                           >
                             <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>
                               {event.title}
                             </div>
                             {!event.isAllDay && event.startTime && event.endTime && (
-                              <div style={{ fontSize: '10px', color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fde68a' : '#78716c' }}>
+                              <div style={{ fontSize: '10px', color: theme.textSecondary }}>
                                 {formatTimeShort(new Date(event.startTime).toTimeString().substring(0, 5))} - {formatTimeShort(new Date(event.endTime).toTimeString().substring(0, 5))}
                               </div>
                             )}
                             {event.isAllDay && (
-                              <div style={{ fontSize: '10px', color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fde68a' : '#78716c' }}>
+                              <div style={{ fontSize: '10px', color: theme.textSecondary }}>
                                 All Day
                               </div>
                             )}
@@ -1761,19 +1758,19 @@ export default function ScheduleGenerator() {
         <h4 style={{ margin: '0 0 10px 0', color: theme.textPrimary }}>Legend:</h4>
         <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '14px', color: theme.textPrimary }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <div style={{ width: '15px', height: '15px', backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#991b1b' : '#fef2f2', border: '1px solid #fecaca', borderRadius: '3px' }} />
+            <div style={{ width: '15px', height: '15px', backgroundColor: theme.danger, border: `1px solid ${theme.borderLight}`, borderRadius: '3px' }} />
             <span>Time-off Conflict (Full Day)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <div style={{ width: '15px', height: '15px', backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#854d0e' : '#fffbeb', border: '1px solid #fed7aa', borderRadius: '3px' }} />
+            <div style={{ width: '15px', height: '15px', backgroundColor: theme.warning, border: `1px solid ${theme.borderLight}`, borderRadius: '3px' }} />
             <span>Partial Day Time-off</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <div style={{ width: '15px', height: '15px', backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#075985' : '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '3px' }} />
+            <div style={{ width: '15px', height: '15px', backgroundColor: theme.primary, border: `1px solid ${theme.borderLight}`, borderRadius: '3px' }} />
             <span>Manager</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <div style={{ width: '15px', height: '15px', backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#166534' : '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '3px' }} />
+            <div style={{ width: '15px', height: '15px', backgroundColor: theme.success, border: `1px solid ${theme.borderLight}`, borderRadius: '3px' }} />
             <span>Staff</span>
           </div>
         </div>
@@ -1808,7 +1805,7 @@ export default function ScheduleGenerator() {
             </h3>
             
             <div style={{ marginBottom: '20px' }}>
-              <p style={{ margin: '0 0 12px 0', color: '#6b7280', fontSize: '14px' }}>
+              <p style={{ margin: '0 0 12px 0', color: theme.textSecondary, fontSize: '14px' }}>
                 Select an employee to add to the schedule:
               </p>
               
@@ -1828,31 +1825,31 @@ export default function ScheduleGenerator() {
                     <div style={{ 
                       width: '12px', 
                       height: '12px', 
-                      backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#166534' : '#f0fdf4', 
-                      border: '1px solid #bbf7d0', 
+                      backgroundColor: theme.success, 
+                      border: `1px solid ${theme.borderLight}`, 
                       borderRadius: '2px' 
                     }} />
-                    <span style={{ color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#86efac' : '#16a34a' }}>Available</span>
+                    <span style={{ color: theme.success }}>Available</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <div style={{ 
                       width: '12px', 
                       height: '12px', 
-                      backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#854d0e' : '#fffbeb', 
-                      border: '1px solid #fed7aa', 
+                      backgroundColor: theme.warning, 
+                      border: `1px solid ${theme.borderLight}`, 
                       borderRadius: '2px' 
                     }} />
-                    <span style={{ color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fde68a' : '#d97706' }}>Partial Time Off</span>
+                    <span style={{ color: theme.warning }}>Partial Time Off</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <div style={{ 
                       width: '12px', 
                       height: '12px', 
-                      backgroundColor: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#991b1b' : '#fef2f2', 
-                      border: '1px solid #fecaca', 
+                      backgroundColor: theme.danger, 
+                      border: `1px solid ${theme.borderLight}`, 
                       borderRadius: '2px' 
                     }} />
-                    <span style={{ color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fca5a5' : '#dc2626' }}>Unavailable</span>
+                    <span style={{ color: theme.danger }}>Unavailable</span>
                   </div>
                 </div>
               </div>
@@ -1890,7 +1887,7 @@ export default function ScheduleGenerator() {
                         alignItems: 'flex-start',
                         marginBottom: '4px'
                       }}>
-                        <div style={{ fontWeight: 'bold' }}>
+                        <div style={{ fontWeight: 'bold', color: theme.textPrimary }}>
                           {employee.full_name}
                         </div>
                         <div style={{
@@ -1904,7 +1901,7 @@ export default function ScheduleGenerator() {
                            availability.status === 'partial' ? 'PARTIAL' : 'UNAVAILABLE'}
                         </div>
                       </div>
-                      <div style={{ color: '#6b7280', fontSize: '12px', marginBottom: '4px' }}>
+                      <div style={{ color: theme.textSecondary, fontSize: '12px', marginBottom: '4px' }}>
                         {employee.position} • {employee.role}
                       </div>
                       <div style={{ 
@@ -1926,11 +1923,12 @@ export default function ScheduleGenerator() {
                 onClick={closeAddEmployeeModal}
                 style={{
                   padding: '8px 16px',
-                  backgroundColor: '#f9fafb',
-                  border: '1px solid #d1d5db',
+                  backgroundColor: theme.bgPrimary,
+                  border: `1px solid ${theme.border}`,
                   borderRadius: '4px',
                   cursor: 'pointer',
-                  fontSize: '14px'
+                  fontSize: '14px',
+                  color: theme.textPrimary
                 }}
               >
                 Cancel
@@ -2112,12 +2110,13 @@ function MonthView({
   if (loading) {
     return (
       <div style={{ 
-        border: '1px solid #d1d5db',
+        border: `1px solid ${theme.border}`,
         borderRadius: '8px',
-        backgroundColor: 'white',
+        backgroundColor: theme.cardBg,
         width: '100%',
         padding: '2rem',
-        textAlign: 'center'
+        textAlign: 'center',
+        color: theme.textPrimary
       }}>
         Loading monthly schedule...
       </div>
@@ -2126,20 +2125,21 @@ function MonthView({
 
   return (
     <div style={{ 
-      border: '1px solid #d1d5db',
+      border: `1px solid ${theme.border}`,
       borderRadius: '8px',
-      backgroundColor: 'white',
+      backgroundColor: theme.cardBg,
       width: '100%'
     }}>
       {/* Month Header */}
       <div style={{
         padding: '12px',
-        backgroundColor: '#f3f4f6',
-        borderBottom: '1px solid #e5e7eb',
+        backgroundColor: theme.bgSecondary,
+        borderBottom: `1px solid ${theme.border}`,
         display: 'grid',
         gridTemplateColumns: 'repeat(7, 1fr)',
         textAlign: 'center',
-        fontWeight: 'bold'
+        fontWeight: 'bold',
+        color: theme.textPrimary
       }}>
         {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
           <div key={day} style={{ padding: '8px' }}>{day}</div>
@@ -2151,7 +2151,7 @@ function MonthView({
         <div key={weekIndex} style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(7, 1fr)',
-          borderBottom: weekIndex < weeks.length - 1 ? '1px solid #e5e7eb' : 'none'
+          borderBottom: weekIndex < weeks.length - 1 ? `1px solid ${theme.border}` : 'none'
         }}>
           {week.map((date, dayIndex) => {
             const dateKey = formatDateForInput(date);
@@ -2165,9 +2165,10 @@ function MonthView({
                 style={{
                   border: dayIndex < 6 ? '0 1px 0 0' : '0',
                   borderStyle: 'solid',
-                  borderColor: '#e5e7eb',
-                  backgroundColor: isCurrentMonth ? 'white' : '#f9fafb',
-                  opacity: isCurrentMonth ? 1 : 0.6
+                  borderColor: theme.border,
+                  backgroundColor: isCurrentMonth ? theme.bgPrimary : theme.bgSecondary,
+                  opacity: isCurrentMonth ? 1 : 0.8,
+                  color: theme.textPrimary
                 }}
               >
                 {/* Date Header */}
@@ -2176,8 +2177,9 @@ function MonthView({
                   fontWeight: 'bold',
                   fontSize: '14px',
                   textAlign: 'center',
-                  backgroundColor: isCurrentMonth ? '#f3f4f6' : '#e5e7eb',
-                  borderBottom: '1px solid #e5e7eb'
+                  backgroundColor: isCurrentMonth ? theme.bgSecondary : theme.cardBg,
+                  borderBottom: `1px solid ${theme.border}`,
+                  color: theme.textPrimary
                 }}>
                   {date.getDate()}
                 </div>
@@ -2193,15 +2195,16 @@ function MonthView({
                             fontSize: '10px',
                             padding: '2px 4px',
                             margin: '2px 0',
-                            backgroundColor: '#dbeafe',
+                            backgroundColor: theme.bgSecondary,
                             borderRadius: '3px',
-                            lineHeight: '1.2'
+                            lineHeight: '1.2',
+                            color: theme.textPrimary
                           }}
                         >
                           <div style={{ fontWeight: 'bold' }}>
                             {shift.employee.display_name}
                           </div>
-                          <div style={{ color: '#6b7280' }}>
+                          <div style={{ color: theme.textSecondary }}>
                             {formatTimeShort(shift.start_time)} - {formatTimeShort(shift.end_time)}
                           </div>
                         </div>
@@ -2215,11 +2218,11 @@ function MonthView({
                           width: '100%',
                           padding: '4px',
                           fontSize: '10px',
-                          backgroundColor: '#f3f4f6',
-                          border: '1px dashed #9ca3af',
+                          backgroundColor: theme.bgSecondary,
+                          border: `1px dashed ${theme.border}`,
                           borderRadius: '3px',
                           cursor: 'pointer',
-                          color: '#6b7280'
+                          color: theme.textSecondary
                         }}
                       >
                         + Add
@@ -2257,24 +2260,23 @@ function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees, 
   const isCurrentUser = currentUserEmployeeId && shift.employee.id === currentUserEmployeeId;
 
   const getShiftBackgroundColor = () => {
-    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    if (shift.conflict) return isDark ? '#991b1b' : '#fef2f2'; // Red for full day conflicts
-    if (shift.partialTimeOff) return isDark ? '#854d0e' : '#fffbeb'; // Yellow for partial conflicts
-    if (shift.employee.role === 'manager') return isDark ? '#075985' : '#f0f9ff'; // Blue for managers
-    if (shift.employee.role === 'tech') return isDark ? '#581c87' : '#faf5ff'; // Purple for tech
-    return isDark ? '#166534' : '#f0fdf4'; // Green for staff
+    // Use theme semantic colors for consistency
+    if (shift.conflict) return theme.cardBg; // conflict will be indicated by border/text
+    if (shift.partialTimeOff) return theme.bgSecondary;
+    if (shift.employee.role === 'manager') return theme.bgTertiary;
+    if (shift.employee.role === 'tech') return theme.bgTertiary;
+    return theme.bgPrimary;
   };
 
   const getBorderColor = () => {
     // If this is the current user's shift, use a bold primary color
-    if (isCurrentUser) return '#2563eb';
-    
-    if (shift.conflict) return '#fecaca';
-    if (shift.partialTimeOff) return '#fed7aa';
-    if (shift.employee.role === 'manager') return '#bae6fd';
-    if (shift.employee.role === 'tech') return '#e9d5ff'; // Purple border for tech
-    return '#bbf7d0';
+    if (isCurrentUser) return theme.primary;
+
+    if (shift.conflict) return theme.danger;
+    if (shift.partialTimeOff) return theme.warning;
+    if (shift.employee.role === 'manager') return theme.primary;
+    if (shift.employee.role === 'tech') return theme.bgTertiary;
+    return theme.success;
   };
   
   const getBorderWidth = () => {
@@ -2365,8 +2367,8 @@ function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees, 
               style={{
                 flex: 1,
                 padding: '4px 8px',
-                backgroundColor: '#10b981',
-                color: 'white',
+                backgroundColor: theme.success,
+                color: theme.primaryText,
                 border: 'none',
                 borderRadius: '3px',
                 cursor: 'pointer',
@@ -2380,8 +2382,8 @@ function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees, 
               style={{
                 flex: 1,
                 padding: '4px 8px',
-                backgroundColor: '#6b7280',
-                color: 'white',
+                backgroundColor: theme.bgTertiary,
+                color: theme.textPrimary,
                 border: 'none',
                 borderRadius: '3px',
                 cursor: 'pointer',
@@ -2394,24 +2396,24 @@ function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees, 
         </div>
       ) : (
         <div>
-          <div style={{ fontWeight: 'bold', marginBottom: '4px', color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#f3f4f6' : '#111827' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '4px', color: theme.textPrimary }}>
             {shift.employee.display_name || shift.employee.full_name}
           </div>
-          <div style={{ color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#d1d5db' : '#6b7280', marginBottom: '4px' }}>
+          <div style={{ color: theme.textSecondary, marginBottom: '4px' }}>
             {shift.employee.position}
           </div>
-          <div style={{ marginBottom: '8px', color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#e5e7eb' : '#374151' }}>
+          <div style={{ marginBottom: '8px', color: theme.textPrimary }}>
             {formatTime(shift.start_time)} - {formatTime(shift.end_time)}
           </div>
           
           {shift.conflict && (
-            <div style={{ color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fca5a5' : '#dc2626', fontSize: '11px', marginBottom: '4px' }}>
+            <div style={{ color: theme.danger, fontSize: '11px', marginBottom: '4px' }}>
               ⚠️ Full Day Time-off
             </div>
           )}
           
           {shift.partialTimeOff && (
-            <div style={{ color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#fde68a' : '#d97706', fontSize: '11px', marginBottom: '4px' }}>
+            <div style={{ color: theme.warning, fontSize: '11px', marginBottom: '4px' }}>
               ⚠️ Available: {formatTime(shift.partialTimeOff.partial_start_time)} - {formatTime(shift.partialTimeOff.partial_end_time)}
             </div>
           )}
@@ -2423,8 +2425,8 @@ function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees, 
                 style={{
                   flex: 1,
                   padding: '4px 8px',
-                  backgroundColor: '#3b82f6',
-                  color: 'white',
+                  backgroundColor: theme.primary,
+                  color: theme.primaryText,
                   border: 'none',
                   borderRadius: '3px',
                   cursor: 'pointer',
@@ -2438,8 +2440,8 @@ function ShiftCard({ shift, dateKey, onUpdate, onRemove, formatTime, employees, 
                 style={{
                   flex: 1,
                   padding: '4px 8px',
-                  backgroundColor: '#dc2626',
-                  color: 'white',
+                  backgroundColor: theme.danger,
+                  color: theme.primaryText,
                   border: 'none',
                   borderRadius: '3px',
                   cursor: 'pointer',

@@ -16,7 +16,6 @@ export const UserProvider = ({ children }) => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    let timeoutId
     let isMounted = true
 
     const initUser = async () => {
@@ -60,27 +59,28 @@ export const UserProvider = ({ children }) => {
           console.log('Could not fetch user profile, using defaults:', err)
         }
 
-        // Create a minimal user object - bypass all permission checks
+        // Create a minimal user object. Do NOT default to admin.
+        // If a profile exists, use its role; otherwise default to a conservative 'staff' role.
+        const resolvedRole = userProfile?.user_role || 'staff'
         const minimalUser = {
           id: authUser.id,
           email: authUser.email,
           full_name: userProfile?.full_name || authUser.email?.split('@')[0] || 'User',
-          user_role: userProfile?.user_role || 'admin',
+          user_role: resolvedRole,
           employee_id: userProfile?.employee_id || null,
-          role: 'admin', // Default to admin to bypass all restrictions
+          role: resolvedRole === 'admin' || resolvedRole === 'manager' ? 'admin' : 'user',
           permissions: {
-            can_view_all: true,
-            can_edit: true,
-            can_delete: true,
-            can_manage_users: true,
-            can_manage_base_schedules: true,
-            can_view_analytics: true
+            // conservative defaults; grant escalated perms only to admin/manager
+            can_view_all: resolvedRole === 'admin' || resolvedRole === 'manager',
+            can_edit: resolvedRole === 'admin' || resolvedRole === 'manager',
+            can_delete: resolvedRole === 'admin' || resolvedRole === 'manager',
+            can_manage_users: resolvedRole === 'admin',
+            can_manage_base_schedules: resolvedRole === 'admin' || resolvedRole === 'manager',
+            can_view_analytics: resolvedRole === 'admin' || resolvedRole === 'manager'
           }
         }
 
-        console.log('UserContext: Setting minimal user:', minimalUser)
-        console.log('UserContext: User role:', minimalUser.user_role)
-        console.log('UserContext: Employee ID:', minimalUser.employee_id)
+        console.log('UserContext: Setting minimal user (conservative):', minimalUser)
         if (isMounted) {
           setUser(minimalUser)
           setLoading(false)
@@ -95,30 +95,7 @@ export const UserProvider = ({ children }) => {
       }
     }
 
-    // Set a 2-second timeout to prevent infinite loading
-    timeoutId = setTimeout(() => {
-      console.log('UserContext timeout - setting default admin user')
-      if (isMounted) {
-        setUser({
-          id: 'default',
-          email: 'admin@admin.com',
-          full_name: 'Admin',
-          user_role: 'admin',
-          employee_id: null,
-          role: 'admin',
-          permissions: {
-            can_view_all: true,
-            can_edit: true,
-            can_delete: true,
-            can_manage_users: true,
-            can_manage_base_schedules: true,
-            can_view_analytics: true
-          }
-        })
-        setLoading(false)
-      }
-    }, 2000)
-
+    // Initialize; if there's no authenticated user, initUser will set user to null and loading false.
     initUser()
 
     // Listen for auth changes
@@ -131,7 +108,7 @@ export const UserProvider = ({ children }) => {
             setLoading(false)
           }
         } else if (event === 'SIGNED_IN' && session?.user) {
-          clearTimeout(timeoutId)
+          // no timeout to clear
           initUser()
         }
       }
@@ -139,8 +116,10 @@ export const UserProvider = ({ children }) => {
 
     return () => {
       isMounted = false
-      clearTimeout(timeoutId)
-      subscription.unsubscribe()
+      // subscription may be undefined in some environments; guard the unsubscribe
+      if (subscription && typeof subscription.unsubscribe === 'function') {
+        subscription.unsubscribe()
+      }
     }
   }, [])
 

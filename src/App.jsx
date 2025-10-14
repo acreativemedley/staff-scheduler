@@ -49,7 +49,13 @@ function AppContent() {
   }
 
   if (!user) {
-    return <AuthFixed />
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', backgroundColor: 'var(--bg-primary)' }}>
+        <div style={{ width: '100%', maxWidth: '420px' }}>
+          <AuthFixed />
+        </div>
+      </div>
+    )
   }
 
   // If user profile is not available, treat as staff with basic access

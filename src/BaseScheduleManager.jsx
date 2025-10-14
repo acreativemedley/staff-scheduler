@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
+import { theme } from './theme';
 
 export default function BaseScheduleManager() {
   const [employees, setEmployees] = useState([]);
@@ -205,7 +206,7 @@ export default function BaseScheduleManager() {
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
       <h2>Base Schedule Manager</h2>
-      <p style={{ marginBottom: '30px', color: '#6b7280' }}>
+      <p style={{ marginBottom: '30px', color: theme.textSecondary }}>
         Define your standard weekly schedule. This will be used as the base for the schedule generator, 
         with time-off conflicts highlighted in red.
       </p>
@@ -214,9 +215,9 @@ export default function BaseScheduleManager() {
       <div style={{ 
         marginBottom: '30px', 
         padding: '20px', 
-        backgroundColor: '#f8fafc', 
+        backgroundColor: theme.bgSecondary, 
         borderRadius: '8px',
-        border: '1px solid #e2e8f0'
+        border: `1px solid ${theme.borderLight}`
       }}>
         <h3 style={{ marginBottom: '15px' }}>Add New Schedule Entry</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
@@ -224,13 +225,13 @@ export default function BaseScheduleManager() {
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
               Employee:
             </label>
-            <select
+              <select
               value={newEntry.employee_id}
               onChange={(e) => setNewEntry(prev => ({ ...prev, employee_id: e.target.value }))}
               style={{
                 width: '100%',
                 padding: '8px',
-                border: '1px solid #d1d5db',
+                border: `1px solid ${theme.inputBorder}`,
                 borderRadius: '4px'
               }}
             >
@@ -247,13 +248,13 @@ export default function BaseScheduleManager() {
             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
               Day:
             </label>
-            <select
+              <select
               value={newEntry.day_of_week}
               onChange={(e) => setNewEntry(prev => ({ ...prev, day_of_week: parseInt(e.target.value) }))}
               style={{
                 width: '100%',
                 padding: '8px',
-                border: '1px solid #d1d5db',
+                border: `1px solid ${theme.inputBorder}`,
                 borderRadius: '4px'
               }}
             >
@@ -276,7 +277,7 @@ export default function BaseScheduleManager() {
               style={{
                 width: '100%',
                 padding: '8px',
-                border: '1px solid #d1d5db',
+                border: `1px solid ${theme.inputBorder}`,
                 borderRadius: '4px'
               }}
             />
@@ -293,7 +294,7 @@ export default function BaseScheduleManager() {
               style={{
                 width: '100%',
                 padding: '8px',
-                border: '1px solid #d1d5db',
+                border: `1px solid ${theme.inputBorder}`,
                 borderRadius: '4px'
               }}
             />
@@ -311,7 +312,7 @@ export default function BaseScheduleManager() {
               style={{
                 width: '100%',
                 padding: '8px',
-                border: '1px solid #d1d5db',
+                border: `1px solid ${theme.inputBorder}`,
                 borderRadius: '4px'
               }}
             />
@@ -323,8 +324,8 @@ export default function BaseScheduleManager() {
               style={{
                 width: '100%',
                 padding: '8px 16px',
-                backgroundColor: '#10b981',
-                color: 'white',
+                backgroundColor: theme.success,
+                color: theme.primaryText,
                 border: 'none',
                 borderRadius: '4px',
                 fontWeight: 'bold',
@@ -345,8 +346,8 @@ export default function BaseScheduleManager() {
             <h4 style={{ 
               margin: '0 0 10px 0', 
               padding: '8px 12px', 
-              backgroundColor: '#3b82f6', 
-              color: 'white', 
+              backgroundColor: theme.bgTertiary, 
+              color: theme.textPrimary, 
               borderRadius: '4px',
               fontSize: '16px'
             }}>
@@ -356,8 +357,8 @@ export default function BaseScheduleManager() {
             {day.entries.length === 0 ? (
               <div style={{ 
                 padding: '15px', 
-                backgroundColor: '#f9fafb', 
-                color: '#6b7280', 
+                backgroundColor: theme.bgSecondary, 
+                color: theme.textSecondary, 
                 borderRadius: '4px',
                 textAlign: 'center'
               }}>
@@ -370,15 +371,15 @@ export default function BaseScheduleManager() {
                     key={entry.id}
                     style={{
                       padding: '15px',
-                      backgroundColor: editing === entry.id ? '#fff3cd' : 'white',
-                      border: '1px solid #e5e7eb',
+                      backgroundColor: editing === entry.id ? theme.bgTertiary : theme.cardBg,
+                      border: `1px solid ${theme.borderLight}`,
                       borderRadius: '6px'
                     }}
                   >
                     {editing === entry.id ? (
                       // Edit Mode
                       <div>
-                        <div style={{ marginBottom: '15px', color: '#856404', fontWeight: 'bold' }}>
+                        <div style={{ marginBottom: '15px', color: theme.textPrimary, fontWeight: 'bold' }}>
                           Editing Shift
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', marginBottom: '15px' }}>
@@ -392,9 +393,11 @@ export default function BaseScheduleManager() {
                               style={{
                                 width: '100%',
                                 padding: '6px',
-                                border: '1px solid #d1d5db',
+                                border: `1px solid ${theme.inputBorder}`,
                                 borderRadius: '4px',
-                                fontSize: '12px'
+                                fontSize: '12px',
+                                backgroundColor: theme.inputBg,
+                                color: theme.textPrimary
                               }}
                             >
                               {employees.map(employee => (
@@ -404,7 +407,7 @@ export default function BaseScheduleManager() {
                               ))}
                             </select>
                           </div>
-                          
+
                           <div>
                             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '12px' }}>
                               Day:
@@ -415,19 +418,19 @@ export default function BaseScheduleManager() {
                               style={{
                                 width: '100%',
                                 padding: '6px',
-                                border: '1px solid #d1d5db',
+                                border: `1px solid ${theme.inputBorder}`,
                                 borderRadius: '4px',
-                                fontSize: '12px'
+                                fontSize: '12px',
+                                backgroundColor: theme.inputBg,
+                                color: theme.textPrimary
                               }}
                             >
                               {days.map(day => (
-                                <option key={day.value} value={day.value}>
-                                  {day.label}
-                                </option>
+                                <option key={day.value} value={day.value}>{day.label}</option>
                               ))}
                             </select>
                           </div>
-                          
+
                           <div>
                             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '12px' }}>
                               Start:
@@ -439,13 +442,15 @@ export default function BaseScheduleManager() {
                               style={{
                                 width: '100%',
                                 padding: '6px',
-                                border: '1px solid #d1d5db',
+                                border: `1px solid ${theme.inputBorder}`,
                                 borderRadius: '4px',
-                                fontSize: '12px'
+                                fontSize: '12px',
+                                backgroundColor: theme.inputBg,
+                                color: theme.textPrimary
                               }}
                             />
                           </div>
-                          
+
                           <div>
                             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '12px' }}>
                               End:
@@ -457,13 +462,15 @@ export default function BaseScheduleManager() {
                               style={{
                                 width: '100%',
                                 padding: '6px',
-                                border: '1px solid #d1d5db',
+                                border: `1px solid ${theme.inputBorder}`,
                                 borderRadius: '4px',
-                                fontSize: '12px'
+                                fontSize: '12px',
+                                backgroundColor: theme.inputBg,
+                                color: theme.textPrimary
                               }}
                             />
                           </div>
-                          
+
                           <div>
                             <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '12px' }}>
                               Notes:
@@ -476,21 +483,23 @@ export default function BaseScheduleManager() {
                               style={{
                                 width: '100%',
                                 padding: '6px',
-                                border: '1px solid #d1d5db',
+                                border: `1px solid ${theme.inputBorder}`,
                                 borderRadius: '4px',
-                                fontSize: '12px'
+                                fontSize: '12px',
+                                backgroundColor: theme.inputBg,
+                                color: theme.textPrimary
                               }}
                             />
                           </div>
                         </div>
-                        
+
                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                           <button
                             onClick={cancelEditing}
                             style={{
                               padding: '4px 8px',
-                              backgroundColor: '#6c757d',
-                              color: 'white',
+                              backgroundColor: theme.bgTertiary,
+                              color: theme.textPrimary,
                               border: 'none',
                               borderRadius: '4px',
                               cursor: 'pointer',
@@ -503,8 +512,8 @@ export default function BaseScheduleManager() {
                             onClick={saveEdit}
                             style={{
                               padding: '4px 8px',
-                              backgroundColor: '#28a745',
-                              color: 'white',
+                              backgroundColor: theme.success,
+                              color: theme.primaryText,
                               border: 'none',
                               borderRadius: '4px',
                               cursor: 'pointer',
@@ -519,10 +528,10 @@ export default function BaseScheduleManager() {
                       // View Mode
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 'bold', color: '#374151' }}>
+                          <div style={{ fontWeight: 'bold', color: theme.textPrimary }}>
                             {entry.employees?.display_name || entry.employees?.full_name}
                           </div>
-                          <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '2px' }}>
+                          <div style={{ fontSize: '14px', color: theme.textSecondary, marginTop: '2px' }}>
                             {entry.employees?.position} • {formatTime(entry.start_time)} - {formatTime(entry.end_time)}
                             {entry.notes && ` • ${entry.notes}`}
                           </div>
@@ -532,8 +541,8 @@ export default function BaseScheduleManager() {
                             onClick={() => startEditing(entry)}
                             style={{
                               padding: '4px 8px',
-                              backgroundColor: '#007bff',
-                              color: 'white',
+                              backgroundColor: theme.primary,
+                              color: theme.primaryText,
                               border: 'none',
                               borderRadius: '4px',
                               cursor: 'pointer',
@@ -546,8 +555,8 @@ export default function BaseScheduleManager() {
                             onClick={() => deleteScheduleEntry(entry.id)}
                             style={{
                               padding: '4px 8px',
-                              backgroundColor: '#dc2626',
-                              color: 'white',
+                              backgroundColor: theme.danger,
+                              color: theme.primaryText,
                               border: 'none',
                               borderRadius: '4px',
                               cursor: 'pointer',
@@ -571,9 +580,9 @@ export default function BaseScheduleManager() {
       <div style={{ 
         marginTop: '30px', 
         padding: '15px', 
-        backgroundColor: '#dbeafe', 
+        backgroundColor: theme.primaryBg, 
         borderRadius: '8px',
-        border: '1px solid #3b82f6'
+        border: `1px solid ${theme.primary}`
       }}>
         <strong>📊 Schedule Summary:</strong>
         <div style={{ marginTop: '8px', fontSize: '14px' }}>

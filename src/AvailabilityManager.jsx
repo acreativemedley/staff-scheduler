@@ -27,9 +27,9 @@ export default function AvailabilityManager() {
   ];
 
   const statusOptions = [
-    { value: 'green', label: 'GREEN (Available)', color: '#4ade80' },
-    { value: 'yellow', label: 'YELLOW (Limited)', color: '#fbbf24' },
-    { value: 'red', label: 'RED (Unavailable)', color: '#f87171' }
+    { value: 'green', label: 'GREEN (Available)', color: theme.success },
+    { value: 'yellow', label: 'YELLOW (Limited)', color: theme.warning },
+    { value: 'red', label: 'RED (Unavailable)', color: theme.danger }
   ];
 
   useEffect(() => {
@@ -177,28 +177,16 @@ export default function AvailabilityManager() {
     setLoading(false);
   };
 
+  // Map status to theme-aware background colors
+  const statusBg = {
+    green: theme.success,
+    yellow: theme.warning,
+    red: theme.danger
+  };
+
   const getStatusColor = (status) => {
-    const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    if (!status) return isDark ? theme.inputBg : '#e5e7eb';
-    
-    // Dark mode: use darker backgrounds with lighter text
-    // Light mode: use bright backgrounds with dark text
-    if (isDark) {
-      switch(status) {
-        case 'green': return '#166534'; // dark green
-        case 'yellow': return '#854d0e'; // dark yellow/orange
-        case 'red': return '#991b1b'; // dark red
-        default: return theme.inputBg;
-      }
-    } else {
-      switch(status) {
-        case 'green': return '#4ade80'; // bright green
-        case 'yellow': return '#fbbf24'; // bright yellow
-        case 'red': return '#f87171'; // bright red
-        default: return '#e5e7eb';
-      }
-    }
+    if (!status) return theme.bgTertiary;
+    return statusBg[status] || theme.inputBg;
   };
 
   return (
@@ -246,7 +234,7 @@ export default function AvailabilityManager() {
           </div>
         )}
         {!canManageEmployees() && !selectedEmployee && (
-          <p style={{ color: '#dc2626', fontSize: '14px', marginTop: '8px' }}>
+          <p style={{ color: theme.textSecondary, fontSize: '14px', marginTop: '8px' }}>
             Your account is not linked to an employee. Please contact an administrator.
           </p>
         )}
@@ -258,11 +246,11 @@ export default function AvailabilityManager() {
           <div style={{
             marginBottom: '30px',
             padding: '20px',
-            border: '2px solid #3b82f6',
+            border: `2px solid ${theme.border}`,
             borderRadius: '8px',
             backgroundColor: theme.cardBg
           }}>
-            <h3 style={{ marginTop: 0, color: '#3b82f6' }}>Weekly Hours Preferences</h3>
+            <h3 style={{ marginTop: 0, color: theme.textPrimary }}>Weekly Hours Preferences</h3>
             <p style={{ fontSize: '14px', color: theme.textSecondary, marginBottom: '15px' }}>
               Set your preferred working hours per week. This helps managers create schedules that match your availability.
             </p>
@@ -491,8 +479,8 @@ export default function AvailabilityManager() {
               onClick={saveAvailability}
               disabled={loading}
               style={{
-                backgroundColor: loading ? '#9ca3af' : '#3b82f6',
-                color: 'white',
+                backgroundColor: loading ? theme.buttonDisabled : theme.primary,
+                color: theme.primaryText,
                 padding: '12px 24px',
                 fontSize: '16px',
                 border: 'none',
@@ -512,9 +500,9 @@ export default function AvailabilityManager() {
               padding: '10px',
               borderRadius: '4px',
               textAlign: 'center',
-              backgroundColor: saveMessage.includes('Error') ? '#fef2f2' : '#f0fdf4',
-              color: saveMessage.includes('Error') ? '#dc2626' : '#16a34a',
-              border: `1px solid ${saveMessage.includes('Error') ? '#fecaca' : '#bbf7d0'}`
+              backgroundColor: saveMessage.includes('Error') ? theme.dangerBg : theme.successBg,
+              color: saveMessage.includes('Error') ? theme.dangerText : theme.successText,
+              border: `1px solid ${saveMessage.includes('Error') ? theme.dangerBorder : theme.successBorder}`
             }}>
               {saveMessage}
             </div>
@@ -523,7 +511,7 @@ export default function AvailabilityManager() {
       )}
 
       {/* Legend */}
-      <div style={{ marginTop: '40px', padding: '15px', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
+      <div style={{ marginTop: '40px', padding: '15px', backgroundColor: theme.bgTertiary, borderRadius: '8px' }}>
         <h4>Status Legend:</h4>
         <div style={{ display: 'grid', gap: '8px' }}>
           {statusOptions.map(option => (
@@ -538,7 +526,7 @@ export default function AvailabilityManager() {
             </div>
           ))}
         </div>
-        <p style={{ marginTop: '10px', fontSize: '14px', color: '#6b7280' }}>
+        <p style={{ marginTop: '10px', fontSize: '14px', color: theme.textSecondary }}>
           <strong>GREEN:</strong> Fully available with optional time constraints<br/>
           <strong>YELLOW:</strong> Limited availability (specify constraints in notes)<br/>
           <strong>RED:</strong> Not available for this day
