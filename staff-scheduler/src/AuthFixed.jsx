@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { supabase } from './supabase'
+import PasswordReset from './PasswordReset'
+import { theme } from './theme'
 
 function Auth({ onAuth }) {
   const [loading, setLoading] = useState(false)
@@ -7,6 +9,7 @@ function Auth({ onAuth }) {
   const [password, setPassword] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
   const [message, setMessage] = useState('')
+  const [showPasswordReset, setShowPasswordReset] = useState(false)
 
   const handleAuth = async (e) => {
     e.preventDefault()
@@ -52,28 +55,64 @@ function Auth({ onAuth }) {
     }
   }
 
+  // Show password reset component if requested
+  if (showPasswordReset) {
+    return <PasswordReset onBack={() => setShowPasswordReset(false)} />
+  }
+
   return (
-    <div style={{ maxWidth: '400px', margin: '2rem auto', padding: '2rem', border: '1px solid #ccc', borderRadius: '8px' }}>
-      <h2>{isSignUp ? 'Sign Up' : 'Sign In'}</h2>
+    <div style={{ 
+      maxWidth: '400px', 
+      margin: '2rem auto', 
+      padding: '2rem', 
+      border: `1px solid ${theme.border}`, 
+      borderRadius: '8px',
+      backgroundColor: theme.cardBg
+    }}>
+      <h2 style={{ color: theme.textPrimary }}>{isSignUp ? 'Sign Up' : 'Sign In'}</h2>
       <form onSubmit={handleAuth}>
         <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Email:</label>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '0.5rem',
+            color: theme.labelColor,
+            fontWeight: '500'
+          }}>Email:</label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+            style={{ 
+              width: '100%', 
+              padding: '0.5rem', 
+              borderRadius: '4px', 
+              border: `1px solid ${theme.inputBorder}`,
+              backgroundColor: theme.inputBg,
+              color: theme.textPrimary
+            }}
           />
         </div>
         <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Password:</label>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '0.5rem',
+            color: theme.labelColor,
+            fontWeight: '500'
+          }}>Password:</label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+            style={{ 
+              width: '100%', 
+              padding: '0.5rem', 
+              borderRadius: '4px', 
+              border: `1px solid ${theme.inputBorder}`,
+              backgroundColor: theme.inputBg,
+              color: theme.textPrimary
+            }}
           />
         </div>
         <button
@@ -82,24 +121,51 @@ function Auth({ onAuth }) {
           style={{
             width: '100%',
             padding: '0.75rem',
-            backgroundColor: '#0066cc',
-            color: 'white',
+            backgroundColor: loading ? theme.buttonDisabled : theme.primary,
+            color: theme.white,
             border: 'none',
             borderRadius: '4px',
             fontSize: '1rem',
-            cursor: loading ? 'not-allowed' : 'pointer'
+            cursor: loading ? 'not-allowed' : 'pointer',
+            fontWeight: 'bold'
           }}
         >
           {loading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
         </button>
       </form>
       
-      <p style={{ textAlign: 'center', margin: '1rem 0' }}>
+      {!isSignUp && (
+        <p style={{ textAlign: 'center', margin: '1rem 0' }}>
+          <button
+            type="button"
+            onClick={() => setShowPasswordReset(true)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: theme.primary,
+              textDecoration: 'underline',
+              cursor: 'pointer',
+              fontSize: '0.9rem'
+            }}
+          >
+            Forgot password?
+          </button>
+        </p>
+      )}
+      
+      <p style={{ textAlign: 'center', margin: '1rem 0', color: theme.textSecondary }}>
         {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
         <button
           type="button"
           onClick={() => setIsSignUp(!isSignUp)}
-          style={{ background: 'none', border: 'none', color: '#0066cc', textDecoration: 'underline', cursor: 'pointer' }}
+          style={{ 
+            background: 'none', 
+            border: 'none', 
+            color: theme.primary, 
+            textDecoration: 'underline', 
+            cursor: 'pointer',
+            fontWeight: '500'
+          }}
         >
           {isSignUp ? 'Sign In' : 'Sign Up'}
         </button>
@@ -110,11 +176,14 @@ function Auth({ onAuth }) {
           padding: '0.75rem',
           marginTop: '1rem',
           borderRadius: '4px',
-          backgroundColor: message.includes('Error') ? '#fee' : '#efe',
-          color: message.includes('Error') ? '#c33' : '#363',
-          border: `1px solid ${message.includes('Error') ? '#fcc' : '#cfc'}`
+          backgroundColor: message.includes('Error') ? theme.dangerBg : theme.successBg,
+          color: message.includes('Error') ? theme.dangerText : theme.successText,
+          border: `1px solid ${message.includes('Error') ? theme.dangerBorder : theme.successBorder}`,
+          fontWeight: '500',
+          fontSize: '14px',
+          lineHeight: '1.5'
         }}>
-          {message}
+          {message.includes('Error') ? '✗ ' : '✓ '}{message}
         </div>
       )}
     </div>

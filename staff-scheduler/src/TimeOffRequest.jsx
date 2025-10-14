@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
+import { parseDate } from './dateUtils';
+import { useUser } from './UserContext-Minimal';
+import { theme } from './theme';
 
 export default function TimeOffRequest() {
+  const { userProfile, canManageEmployees } = useUser();
   const [employees, setEmployees] = useState([]);
   const [formData, setFormData] = useState({
     employee_id: '',
@@ -20,6 +24,8 @@ export default function TimeOffRequest() {
   const [message, setMessage] = useState('');
   const [warningMessage, setWarningMessage] = useState('');
 
+  // parseDate function is now imported from dateUtils.js
+
   useEffect(() => {
     fetchEmployees();
   }, []);
@@ -34,6 +40,17 @@ export default function TimeOffRequest() {
       console.error('Error fetching employees:', error);
     } else {
       setEmployees(data || []);
+      
+      // If user is staff and has a linked employee_id, auto-select it
+      if (!canManageEmployees() && userProfile?.employee_id && data) {
+        const linkedEmployee = data.find(emp => emp.id === userProfile.employee_id);
+        if (linkedEmployee) {
+          setFormData(prev => ({
+            ...prev,
+            employee_id: linkedEmployee.id
+          }));
+        }
+      }
     }
   };
 
@@ -91,11 +108,11 @@ export default function TimeOffRequest() {
       return 'Please specify when the recurring pattern should end.';
     }
 
-    if (!formData.is_recurring && new Date(formData.end_date) < new Date(formData.start_date)) {
+    if (!formData.is_recurring && parseDate(formData.end_date) < parseDate(formData.start_date)) {
       return 'End date cannot be before start date.';
     }
 
-    if (formData.is_recurring && new Date(formData.recurrence_end_date) < new Date(formData.start_date)) {
+    if (formData.is_recurring && parseDate(formData.recurrence_end_date) < parseDate(formData.start_date)) {
       return 'Recurrence end date cannot be before start date.';
     }
 
@@ -121,7 +138,7 @@ export default function TimeOffRequest() {
     }
 
     const today = new Date();
-    const startDate = new Date(formData.start_date);
+    const startDate = parseDate(formData.start_date);
     const fourWeeksFromNow = new Date();
     fourWeeksFromNow.setDate(today.getDate() + 28);
     
@@ -173,6 +190,79 @@ export default function TimeOffRequest() {
 
       console.log('Submitting request data:', requestData);
 
+      // Check for duplicate time-off requests
+      const { data: existingRequests, error: checkError } = await supabase
+        .from('time_off_requests')
+        .select('id, start_date, end_date, is_recurring, reason, parent_request_id')
+        .eq('employee_id', formData.employee_id)
+        .or(`and(start_date.lte.${requestData.end_date},end_date.gte.${requestData.start_date})`)
+        .limit(20);
+
+      if (checkError) {
+        console.warn('Could not check for duplicates:', checkError);
+        // Continue anyway - don't block submission if duplicate check fails
+      } else if (existingRequests && existingRequests.length > 0) {
+        const isSingleDayRequest = requestData.start_date === requestData.end_date;
+        const isMultiDayRequest = !isSingleDayRequest && !formData.is_recurring;
+        
+        // Check for EXACT duplicates (same start AND end date)
+        const exactDuplicate = existingRequests.find(existing => 
+          existing.start_date === requestData.start_date && 
+          existing.end_date === requestData.end_date &&
+          !existing.parent_request_id // Don't count recurring instances as duplicates
+        );
+
+        if (exactDuplicate) {
+          const errorMsg = `⚠️ Duplicate Request Detected\n\nThis employee already has an identical time-off request for ${requestData.start_date}${requestData.end_date !== requestData.start_date ? ` through ${requestData.end_date}` : ''}.\n\nReason: ${exactDuplicate.reason || '(No reason provided)'}\n\nPlease check the Time-Off Manager to view or edit the existing request.`;
+          alert(errorMsg);
+          setMessage('Duplicate request detected - please check existing time-off requests.');
+          setLoading(false);
+          return;
+        }
+
+        // For single-day requests, block if the EXACT same day exists (not part of a recurring pattern parent)
+        if (isSingleDayRequest) {
+          const sameDayRequest = existingRequests.find(existing => 
+            existing.start_date === requestData.start_date && 
+            existing.end_date === requestData.start_date &&
+            !existing.parent_request_id // Don't block if it's just a recurring pattern parent
+          );
+          
+          if (sameDayRequest) {
+            const errorMsg = `⚠️ Duplicate Request Detected\n\nThis employee already has time-off on ${requestData.start_date}.\n\nReason: ${sameDayRequest.reason || '(No reason provided)'}\n\nPlease check the Time-Off Manager to view existing requests.`;
+            alert(errorMsg);
+            setMessage('Duplicate request detected - please check existing time-off requests.');
+            setLoading(false);
+            return;
+          }
+        }
+
+        // For multi-day requests: WARN about overlaps but allow submission
+        if (isMultiDayRequest && existingRequests.length > 0) {
+          const overlappingDays = existingRequests
+            .filter(existing => existing.start_date >= requestData.start_date && existing.start_date <= requestData.end_date)
+            .map(req => req.start_date);
+          
+          if (overlappingDays.length > 0) {
+            const continueSubmit = confirm(
+              `ℹ️ Overlapping Time-Off Detected\n\n` +
+              `This request includes ${overlappingDays.length} day(s) that already have time-off:\n` +
+              `${overlappingDays.slice(0, 5).join(', ')}${overlappingDays.length > 5 ? '...' : ''}\n\n` +
+              `This might be expected (e.g., recurring Saturdays within a vacation week).\n\n` +
+              `Do you want to continue submitting this request?`
+            );
+            
+            if (!continueSubmit) {
+              setMessage('Submission cancelled - please review overlapping dates.');
+              setLoading(false);
+              return;
+            }
+            
+            console.log('User confirmed submission despite overlaps');
+          }
+        }
+      }
+
       const { data, error } = await supabase
         .from('time_off_requests')
         .insert([requestData])
@@ -208,9 +298,13 @@ export default function TimeOffRequest() {
         setMessage('Time-off request submitted successfully!');
       }
       
-      // Reset form
+      // Reset form but preserve employee_id for staff users
+      const preservedEmployeeId = !canManageEmployees() && userProfile?.employee_id 
+        ? userProfile.employee_id 
+        : '';
+      
       setFormData({
-        employee_id: '',
+        employee_id: preservedEmployeeId,
         start_date: '',
         end_date: '',
         request_type: 'full_days',
@@ -242,8 +336,8 @@ export default function TimeOffRequest() {
 
   return (
     <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
-      <h2>Submit Time-Off Request</h2>
-      <p style={{ marginBottom: '30px', color: '#6b7280' }}>
+      <h2 style={{ color: theme.textPrimary }}>Submit Time-Off Request</h2>
+      <p style={{ marginBottom: '30px', color: theme.textSecondary }}>
         Submit requests for full days off or partial days with specific times.
       </p>
 
@@ -253,24 +347,43 @@ export default function TimeOffRequest() {
           <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
             Employee: *
           </label>
-          <select
-            value={formData.employee_id}
-            onChange={(e) => handleInputChange('employee_id', e.target.value)}
-            style={{
+          {canManageEmployees() ? (
+              <select
+              value={formData.employee_id}
+              onChange={(e) => handleInputChange('employee_id', e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px',
+                fontSize: '16px',
+                border: `1px solid ${theme.inputBorder}`,
+                borderRadius: '5px'
+              }}
+            >
+              <option value="">Select employee...</option>
+              {employees.map(employee => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.display_name || employee.full_name} ({employee.position})
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div style={{
               width: '100%',
               padding: '10px',
               fontSize: '16px',
-              border: '1px solid #d1d5db',
-              borderRadius: '5px'
-            }}
-          >
-            <option value="">Select employee...</option>
-            {employees.map(employee => (
-              <option key={employee.id} value={employee.id}>
-                {employee.display_name || employee.full_name} ({employee.position})
-              </option>
-            ))}
-          </select>
+              border: `1px solid ${theme.inputBorder}`,
+              borderRadius: '5px',
+              backgroundColor: theme.bgSecondary,
+              color: theme.textPrimary
+            }}>
+              {employees.find(emp => emp.id === formData.employee_id)?.full_name || 'Not linked to an employee'}
+            </div>
+          )}
+          {!canManageEmployees() && !formData.employee_id && (
+            <p style={{ color: theme.dangerText, fontSize: '14px', marginTop: '4px' }}>
+              Your account is not linked to an employee. Please contact an administrator.
+            </p>
+          )}
         </div>
 
         {/* Request Type */}
@@ -285,7 +398,7 @@ export default function TimeOffRequest() {
               width: '100%',
               padding: '10px',
               fontSize: '16px',
-              border: '1px solid #d1d5db',
+              border: `1px solid ${theme.inputBorder}`,
               borderRadius: '5px'
             }}
           >
@@ -295,7 +408,7 @@ export default function TimeOffRequest() {
         </div>
 
         {/* Date Range */}
-        <div style={{ display: 'grid', gridTemplateColumns: formData.is_recurring ? '1fr' : '1fr 1fr', gap: '15px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: formData.is_recurring ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
           <div>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
               {formData.is_recurring ? 'Pattern Start Date: *' : 'Start Date: *'}
@@ -309,12 +422,12 @@ export default function TimeOffRequest() {
                 width: '100%',
                 padding: '10px',
                 fontSize: '16px',
-                border: '1px solid #d1d5db',
+                border: `1px solid ${theme.inputBorder}`,
                 borderRadius: '5px'
               }}
             />
             {formData.is_recurring && (
-              <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                <p style={{ fontSize: '12px', color: theme.textSecondary, marginTop: '4px' }}>
                 The first occurrence of your recurring time-off pattern
               </p>
             )}
@@ -324,7 +437,7 @@ export default function TimeOffRequest() {
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
                 End Date: *
               </label>
-              <input
+                <input
                 type="date"
                 value={formData.end_date}
                 onChange={(e) => handleInputChange('end_date', e.target.value)}
@@ -334,14 +447,15 @@ export default function TimeOffRequest() {
                   width: '100%',
                   padding: '10px',
                   fontSize: '16px',
-                  border: '1px solid #d1d5db',
+                    border: `1px solid ${theme.inputBorder}`,
                   borderRadius: '5px',
-                  backgroundColor: formData.request_type === 'partial_day' ? '#f3f4f6' : 'white',
+                  backgroundColor: formData.request_type === 'partial_day' ? theme.bgSecondary : theme.inputBg,
+                  color: theme.textPrimary,
                   cursor: formData.request_type === 'partial_day' ? 'not-allowed' : 'default'
                 }}
               />
               {formData.request_type === 'partial_day' && (
-                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                <p style={{ fontSize: '12px', color: theme.textSecondary, marginTop: '4px' }}>
                   End date automatically matches start date for partial days
                 </p>
               )}
@@ -352,11 +466,11 @@ export default function TimeOffRequest() {
         {/* Partial Day Times */}
         {formData.request_type === 'partial_day' && (
           <div>
-            <h4 style={{ margin: '0 0 10px 0', color: '#374151' }}>Available Times (when you CAN work)</h4>
-            <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '15px' }}>
+            <h4 style={{ margin: '0 0 10px 0', color: theme.textPrimary }}>Available Times (when you CAN work)</h4>
+            <p style={{ fontSize: '14px', color: theme.textSecondary, marginBottom: '15px' }}>
               Specify the hours you ARE available to work on this day. You'll be off during all other hours.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
                   Available From: *
@@ -369,7 +483,7 @@ export default function TimeOffRequest() {
                     width: '100%',
                     padding: '10px',
                     fontSize: '16px',
-                    border: '1px solid #d1d5db',
+                    border: `1px solid ${theme.inputBorder}`,
                     borderRadius: '5px'
                   }}
                 />
@@ -386,7 +500,7 @@ export default function TimeOffRequest() {
                     width: '100%',
                     padding: '10px',
                     fontSize: '16px',
-                    border: '1px solid #d1d5db',
+                    border: `1px solid ${theme.inputBorder}`,
                     borderRadius: '5px'
                   }}
                 />
@@ -395,8 +509,8 @@ export default function TimeOffRequest() {
             <div style={{ 
               marginTop: '10px',
               padding: '10px',
-              backgroundColor: '#f0f9ff',
-              border: '1px solid #0ea5e9',
+              backgroundColor: theme.infoBg,
+              border: `1px solid ${theme.infoBorder}`,
               borderRadius: '5px',
               fontSize: '14px'
             }}>
@@ -419,7 +533,7 @@ export default function TimeOffRequest() {
               minHeight: '80px',
               padding: '10px',
               fontSize: '16px',
-              border: '1px solid #d1d5db',
+              border: `1px solid ${theme.inputBorder}`,
               borderRadius: '5px',
               resize: 'vertical'
             }}
@@ -444,13 +558,13 @@ export default function TimeOffRequest() {
           {formData.is_recurring && (
             <div style={{ 
               padding: '15px', 
-              backgroundColor: '#f8fafc', 
-              border: '1px solid #e2e8f0', 
+              backgroundColor: theme.bgTertiary, 
+              border: `1px solid ${theme.borderLight}`, 
               borderRadius: '8px',
               display: 'grid',
               gap: '15px'
             }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
                     Pattern: *
@@ -462,7 +576,7 @@ export default function TimeOffRequest() {
                       width: '100%',
                       padding: '10px',
                       fontSize: '16px',
-                      border: '1px solid #d1d5db',
+                      border: `1px solid ${theme.inputBorder}`,
                       borderRadius: '5px'
                     }}
                   >
@@ -484,9 +598,9 @@ export default function TimeOffRequest() {
                       width: '100%',
                       padding: '10px',
                       fontSize: '16px',
-                      border: '1px solid #d1d5db',
+                      border: `1px solid ${theme.inputBorder}`,
                       borderRadius: '5px',
-                      backgroundColor: formData.recurrence_pattern === 'biweekly' ? '#f3f4f6' : 'white'
+                      backgroundColor: formData.recurrence_pattern === 'biweekly' ? theme.inputDisabledBg : theme.inputBg
                     }}
                   >
                     {formData.recurrence_pattern === 'weekly' && (
@@ -523,19 +637,19 @@ export default function TimeOffRequest() {
                     width: '100%',
                     padding: '10px',
                     fontSize: '16px',
-                    border: '1px solid #d1d5db',
+                    border: `1px solid ${theme.inputBorder}`,
                     borderRadius: '5px'
                   }}
                 />
-                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                <p style={{ fontSize: '12px', color: theme.textSecondary, marginTop: '4px' }}>
                   The recurring pattern will stop generating instances after this date
                 </p>
               </div>
               
               <div style={{ 
                 padding: '10px',
-                backgroundColor: '#dbeafe',
-                border: '1px solid #3b82f6',
+                backgroundColor: theme.primaryBg,
+                border: `1px solid ${theme.primary}`,
                 borderRadius: '5px',
                 fontSize: '14px'
               }}>
@@ -554,8 +668,8 @@ export default function TimeOffRequest() {
             onClick={submitRequest}
             disabled={loading}
             style={{
-              backgroundColor: loading ? '#9ca3af' : '#10b981',
-              color: 'white',
+              backgroundColor: loading ? theme.buttonDisabled : theme.success,
+              color: theme.primaryText,
               padding: '12px 30px',
               fontSize: '16px',
               border: 'none',
@@ -574,9 +688,9 @@ export default function TimeOffRequest() {
             padding: '12px',
             borderRadius: '6px',
             textAlign: 'center',
-            backgroundColor: message.includes('Error') ? '#fef2f2' : '#f0fdf4',
-            color: message.includes('Error') ? '#dc2626' : '#16a34a',
-            border: `1px solid ${message.includes('Error') ? '#fecaca' : '#bbf7d0'}`,
+            backgroundColor: message.includes('Error') ? theme.dangerBg : theme.successBg,
+            color: message.includes('Error') ? theme.dangerText : theme.successText,
+            border: `1px solid ${message.includes('Error') ? theme.dangerBorder : theme.successBorder}`,
             fontWeight: 'bold'
           }}>
             {message}
@@ -589,9 +703,9 @@ export default function TimeOffRequest() {
             padding: '12px',
             borderRadius: '6px',
             textAlign: 'center',
-            backgroundColor: '#fffbeb',
-            color: '#d97706',
-            border: '1px solid #fed7aa',
+            backgroundColor: theme.warningBg,
+            color: theme.warningText,
+            border: `1px solid ${theme.warningBorder}`,
             fontWeight: 'bold'
           }}>
             {warningMessage}
@@ -600,15 +714,15 @@ export default function TimeOffRequest() {
       </div>
 
       {/* Quick Action Buttons */}
-      <div style={{ marginTop: '30px', padding: '20px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
-        <h4>Quick Actions (Recommended: 4+ weeks in advance):</h4>
+      <div style={{ marginTop: '30px', padding: '20px', backgroundColor: theme.cardBg, borderRadius: '8px' }}>
+        <h4 style={{ color: theme.textPrimary }}>Quick Actions (Recommended: 4+ weeks in advance):</h4>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginTop: '10px' }}>
           <button
             onClick={() => handleInputChange('start_date', formatDateForInput(28))}
             style={{
               padding: '8px 12px',
-              backgroundColor: '#e5e7eb',
-              border: '1px solid #d1d5db',
+              backgroundColor: theme.grayBg,
+              border: `1px solid ${theme.inputBorder}`,
               borderRadius: '4px',
               cursor: 'pointer',
               fontSize: '14px'
@@ -620,8 +734,8 @@ export default function TimeOffRequest() {
             onClick={() => handleInputChange('start_date', formatDateForInput(35))}
             style={{
               padding: '8px 12px',
-              backgroundColor: '#e5e7eb',
-              border: '1px solid #d1d5db',
+              backgroundColor: theme.grayBg,
+              border: `1px solid ${theme.inputBorder}`,
               borderRadius: '4px',
               cursor: 'pointer',
               fontSize: '14px'
@@ -639,8 +753,8 @@ export default function TimeOffRequest() {
             }}
             style={{
               padding: '8px 12px',
-              backgroundColor: '#e5e7eb',
-              border: '1px solid #d1d5db',
+              backgroundColor: theme.grayBg,
+              border: `1px solid ${theme.inputBorder}`,
               borderRadius: '4px',
               cursor: 'pointer',
               fontSize: '14px'
@@ -649,7 +763,7 @@ export default function TimeOffRequest() {
             📅 6 Weeks From Now
           </button>
         </div>
-        <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '10px', fontStyle: 'italic' }}>
+        <p style={{ fontSize: '12px', color: theme.textSecondary, marginTop: '10px', fontStyle: 'italic' }}>
           💡 Tip: Submitting requests 4+ weeks in advance helps with better schedule planning and coverage.
         </p>
       </div>

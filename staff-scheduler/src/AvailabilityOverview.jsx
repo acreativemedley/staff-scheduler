@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
+import { theme } from './theme';
 
 export default function AvailabilityOverview() {
   const [employees, setEmployees] = useState([]);
@@ -16,10 +17,18 @@ export default function AvailabilityOverview() {
     { id: 6, name: 'Sat', fullName: 'Saturday' }
   ];
 
-  const statusColors = {
-    green: '#4ade80',
-    yellow: '#fbbf24',
-    red: '#f87171'
+  // Map logical availability statuses to theme-aware colors.
+  // Use solid semantic colors for status pills and theme.*Text for summary text.
+  const statusBg = {
+    green: theme.success,
+    yellow: theme.warning,
+    red: theme.danger
+  };
+
+  const statusText = {
+    green: theme.successText,
+    yellow: theme.warningText,
+    red: theme.dangerText
   };
 
   useEffect(() => {
@@ -29,20 +38,26 @@ export default function AvailabilityOverview() {
   const fetchAvailabilityOverview = async () => {
     setLoading(true);
     try {
+      console.log('AvailabilityOverview: Starting to fetch data...');
+      
       // Fetch employees
+      console.log('AvailabilityOverview: Fetching employees...');
       const { data: employeesData, error: employeesError } = await supabase
         .from('employees')
         .select('id, full_name, display_name, position')
         .order('full_name');
 
+      console.log('AvailabilityOverview: Employees result:', { employeesData, employeesError });
       if (employeesError) throw employeesError;
 
       // Fetch all availability data
+      console.log('AvailabilityOverview: Fetching availability data...');
       const { data: availabilityData, error: availabilityError } = await supabase
         .from('employee_availability')
         .select('*')
         .order('day_of_week');
 
+      console.log('AvailabilityOverview: Availability result:', { availabilityData, availabilityError });
       if (availabilityError) throw availabilityError;
 
       // Organize availability by employee
@@ -56,9 +71,11 @@ export default function AvailabilityOverview() {
 
       setEmployees(employeesData || []);
       setAvailability(availabilityByEmployee);
+      console.log('AvailabilityOverview: Data successfully loaded');
     } catch (error) {
-      console.error('Error fetching availability overview:', error);
+      console.error('AvailabilityOverview: Error fetching availability overview:', error);
     }
+    console.log('AvailabilityOverview: Setting loading to false');
     setLoading(false);
   };
 
@@ -69,20 +86,20 @@ export default function AvailabilityOverview() {
     if (!dayAvailability) {
       return (
         <div style={{
-          backgroundColor: '#e5e7eb',
+          backgroundColor: theme.inputDisabledBg,
           padding: '8px',
           textAlign: 'center',
           borderRadius: '4px',
           fontSize: '12px',
-          color: '#6b7280'
+          color: theme.textSecondary
         }}>
           Not Set
         </div>
       );
     }
 
-    const backgroundColor = statusColors[dayAvailability.status] || '#e5e7eb';
-    const textColor = dayAvailability.status === 'yellow' ? '#000' : '#fff';
+  const backgroundColor = statusBg[dayAvailability.status] || theme.inputDisabledBg;
+    const textColor = dayAvailability.status === 'yellow' ? theme.warningText : theme.primaryText;
     
     let timeText = '';
     if (dayAvailability.earliest_start_time || dayAvailability.latest_end_time) {
@@ -126,14 +143,14 @@ export default function AvailabilityOverview() {
         }}
         title={dayAvailability.notes ? `Notes: ${dayAvailability.notes}` : ''}
       >
-        <div>{dayAvailability.status.toUpperCase()}</div>
+  <div style={{ color: theme.textPrimary }}>{dayAvailability.status.toUpperCase()}</div>
         {timeText && (
-          <div style={{ fontSize: '10px', fontWeight: 'normal', opacity: 0.9 }}>
+          <div style={{ fontSize: '10px', fontWeight: 'normal', opacity: 0.9, color: theme.textSecondary }}>
             {timeText}
           </div>
         )}
         {dayAvailability.notes && (
-          <div style={{ fontSize: '10px', fontWeight: 'normal', opacity: 0.8 }}>
+          <div style={{ fontSize: '10px', fontWeight: 'normal', opacity: 0.8, color: theme.textSecondary }}>
             📝
           </div>
         )}
@@ -143,25 +160,25 @@ export default function AvailabilityOverview() {
 
   if (loading) {
     return (
-      <div style={{ padding: '20px', textAlign: 'center' }}>
+      <div style={{ padding: '20px', textAlign: 'center', color: theme.textPrimary }}>
         <div>Loading availability overview...</div>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '20px' }}>
+    <div style={{ padding: '20px', color: theme.textPrimary }}>
       <h2>Team Availability Overview</h2>
-      <p style={{ marginBottom: '20px', color: '#6b7280' }}>
+      <p style={{ marginBottom: '20px', color: theme.textSecondary }}>
         Weekly availability status for all employees. Click on any cell for details.
       </p>
 
       {/* Availability Grid */}
       <div style={{ 
         overflowX: 'auto',
-        border: '1px solid #d1d5db',
+        border: `1px solid ${theme.border}`,
         borderRadius: '8px',
-        backgroundColor: 'white'
+        backgroundColor: theme.cardBg
       }}>
         <table style={{ 
           width: '100%', 
@@ -169,12 +186,12 @@ export default function AvailabilityOverview() {
           minWidth: '800px'
         }}>
           <thead>
-            <tr style={{ backgroundColor: '#f3f4f6' }}>
+            <tr style={{ backgroundColor: theme.bgTertiary }}>
               <th style={{
                 padding: '12px',
                 textAlign: 'left',
-                borderBottom: '2px solid #d1d5db',
-                borderRight: '1px solid #d1d5db',
+                borderBottom: `2px solid ${theme.border}`,
+                borderRight: `1px solid ${theme.border}`,
                 fontWeight: 'bold',
                 minWidth: '200px'
               }}>
@@ -184,8 +201,8 @@ export default function AvailabilityOverview() {
                 <th key={day.id} style={{
                   padding: '12px',
                   textAlign: 'center',
-                  borderBottom: '2px solid #d1d5db',
-                  borderRight: day.id === 6 ? 'none' : '1px solid #d1d5db',
+                  borderBottom: `2px solid ${theme.border}`,
+                  borderRight: day.id === 6 ? 'none' : `1px solid ${theme.border}`,
                   fontWeight: 'bold',
                   minWidth: '100px'
                 }}>
@@ -199,22 +216,22 @@ export default function AvailabilityOverview() {
               <tr key={employee.id}>
                 <td style={{
                   padding: '12px',
-                  borderBottom: '1px solid #e5e7eb',
-                  borderRight: '1px solid #d1d5db',
-                  backgroundColor: '#f9fafb'
+                  borderBottom: `1px solid ${theme.borderLight}`,
+                  borderRight: `1px solid ${theme.border}`,
+                  backgroundColor: theme.bgSecondary
                 }}>
                   <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
                     {employee.display_name || employee.full_name}
                   </div>
-                  <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                  <div style={{ fontSize: '12px', color: theme.textSecondary }}>
                     {employee.position}
                   </div>
                 </td>
                 {daysOfWeek.map(day => (
                   <td key={day.id} style={{
                     padding: '8px',
-                    borderBottom: '1px solid #e5e7eb',
-                    borderRight: day.id === 6 ? 'none' : '1px solid #d1d5db'
+                    borderBottom: `1px solid ${theme.borderLight}`,
+                    borderRight: day.id === 6 ? 'none' : `1px solid ${theme.border}`
                   }}>
                     {getAvailabilityCell(employee, day)}
                   </td>
@@ -248,24 +265,24 @@ export default function AvailabilityOverview() {
           return (
             <div key={day.id} style={{
               padding: '15px',
-              backgroundColor: '#f9fafb',
+              backgroundColor: theme.bgSecondary,
               borderRadius: '8px',
-              border: '1px solid #e5e7eb'
+              border: `1px solid ${theme.borderLight}`
             }}>
               <h4 style={{ margin: '0 0 10px 0', textAlign: 'center' }}>
                 {day.fullName}
               </h4>
               <div style={{ fontSize: '12px', display: 'grid', gap: '2px' }}>
-                <div style={{ color: '#16a34a' }}>
+                <div style={{ color: statusText.green }}>
                   ✅ Available: {dayStats.green || 0}
                 </div>
-                <div style={{ color: '#ca8a04' }}>
+                <div style={{ color: statusText.yellow }}>
                   ⚠️ Limited: {dayStats.yellow || 0}
                 </div>
-                <div style={{ color: '#dc2626' }}>
+                <div style={{ color: statusText.red }}>
                   ❌ Unavailable: {dayStats.red || 0}
                 </div>
-                <div style={{ color: '#6b7280' }}>
+                <div style={{ color: theme.textSecondary }}>
                   ❓ Not Set: {dayStats.notSet || 0}
                 </div>
               </div>
@@ -278,7 +295,7 @@ export default function AvailabilityOverview() {
       <div style={{ 
         marginTop: '30px',
         padding: '15px',
-        backgroundColor: '#f3f4f6',
+        backgroundColor: theme.bgTertiary,
         borderRadius: '8px'
       }}>
         <h4>Legend:</h4>
@@ -287,7 +304,7 @@ export default function AvailabilityOverview() {
             <div style={{
               width: '20px',
               height: '20px',
-              backgroundColor: statusColors.green,
+              backgroundColor: statusBg.green,
               borderRadius: '4px'
             }} />
             <span>GREEN - Fully Available</span>
@@ -296,7 +313,7 @@ export default function AvailabilityOverview() {
             <div style={{
               width: '20px',
               height: '20px',
-              backgroundColor: statusColors.yellow,
+              backgroundColor: statusBg.yellow,
               borderRadius: '4px'
             }} />
             <span>YELLOW - Limited Availability</span>
@@ -305,7 +322,7 @@ export default function AvailabilityOverview() {
             <div style={{
               width: '20px',
               height: '20px',
-              backgroundColor: statusColors.red,
+              backgroundColor: statusBg.red,
               borderRadius: '4px'
             }} />
             <span>RED - Unavailable</span>
@@ -314,13 +331,13 @@ export default function AvailabilityOverview() {
             <div style={{
               width: '20px',
               height: '20px',
-              backgroundColor: '#e5e7eb',
+              backgroundColor: theme.inputDisabledBg,
               borderRadius: '4px'
             }} />
             <span>Not Set</span>
           </div>
         </div>
-        <p style={{ marginTop: '10px', fontSize: '12px', color: '#6b7280' }}>
+        <p style={{ marginTop: '10px', fontSize: '12px', color: theme.textSecondary }}>
           📝 = Has notes | Times shown are availability windows | Hover for notes
         </p>
       </div>

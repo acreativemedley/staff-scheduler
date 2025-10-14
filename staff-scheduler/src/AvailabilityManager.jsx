@@ -1,10 +1,18 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
+import { useUser } from './UserContext-Minimal';
+import { theme } from './theme';
 
 export default function AvailabilityManager() {
+  const { userProfile, canManageEmployees } = useUser();
   const [employees, setEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState('');
   const [availability, setAvailability] = useState({});
+  const [hoursPreferences, setHoursPreferences] = useState({
+    minimum_hours_per_week: '',
+    preferred_hours_per_week: '',
+    maximum_hours_per_week: ''
+  });
   const [loading, setLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
@@ -19,9 +27,9 @@ export default function AvailabilityManager() {
   ];
 
   const statusOptions = [
-    { value: 'green', label: 'GREEN (Available)', color: '#4ade80' },
-    { value: 'yellow', label: 'YELLOW (Limited)', color: '#fbbf24' },
-    { value: 'red', label: 'RED (Unavailable)', color: '#f87171' }
+    { value: 'green', label: 'GREEN (Available)', color: theme.success },
+    { value: 'yellow', label: 'YELLOW (Limited)', color: theme.warning },
+    { value: 'red', label: 'RED (Unavailable)', color: theme.danger }
   ];
 
   useEffect(() => {
@@ -37,18 +45,28 @@ export default function AvailabilityManager() {
   const fetchEmployees = async () => {
     const { data, error } = await supabase
       .from('employees')
-      .select('id, full_name, display_name, position')
+      .select('id, full_name, display_name, position, minimum_hours_per_week, preferred_hours_per_week, maximum_hours_per_week')
       .order('full_name');
     
     if (error) {
       console.error('Error fetching employees:', error);
     } else {
       setEmployees(data || []);
+      
+      // If user is staff and has a linked employee_id, auto-select it
+      if (!canManageEmployees() && userProfile?.employee_id && data) {
+        const linkedEmployee = data.find(emp => emp.id === userProfile.employee_id);
+        if (linkedEmployee) {
+          setSelectedEmployee(linkedEmployee.id);
+        }
+      }
     }
   };
 
   const fetchEmployeeAvailability = async (employeeId) => {
     setLoading(true);
+    
+    // Fetch availability data
     const { data, error } = await supabase
       .from('employee_availability')
       .select('*')
@@ -69,6 +87,24 @@ export default function AvailabilityManager() {
       });
       setAvailability(availabilityObj);
     }
+    
+    // Fetch employee hours preferences
+    const { data: employeeData, error: empError } = await supabase
+      .from('employees')
+      .select('minimum_hours_per_week, preferred_hours_per_week, maximum_hours_per_week')
+      .eq('id', employeeId)
+      .single();
+    
+    if (empError) {
+      console.error('Error fetching employee hours:', empError);
+    } else if (employeeData) {
+      setHoursPreferences({
+        minimum_hours_per_week: employeeData.minimum_hours_per_week || '',
+        preferred_hours_per_week: employeeData.preferred_hours_per_week || '',
+        maximum_hours_per_week: employeeData.maximum_hours_per_week || ''
+      });
+    }
+    
     setLoading(false);
   };
 
@@ -117,6 +153,18 @@ export default function AvailabilityManager() {
 
         if (error) throw error;
       }
+      
+      // Update employee hours preferences
+      const { error: hoursError } = await supabase
+        .from('employees')
+        .update({
+          minimum_hours_per_week: hoursPreferences.minimum_hours_per_week || null,
+          preferred_hours_per_week: hoursPreferences.preferred_hours_per_week || null,
+          maximum_hours_per_week: hoursPreferences.maximum_hours_per_week || null
+        })
+        .eq('id', selectedEmployee);
+      
+      if (hoursError) throw hoursError;
 
       setSaveMessage('Availability saved successfully!');
       setTimeout(() => setSaveMessage(''), 3000);
@@ -129,43 +177,181 @@ export default function AvailabilityManager() {
     setLoading(false);
   };
 
+  // Map status to theme-aware background colors
+  const statusBg = {
+    green: theme.success,
+    yellow: theme.warning,
+    red: theme.danger
+  };
+
   const getStatusColor = (status) => {
-    const statusOption = statusOptions.find(opt => opt.value === status);
-    return statusOption ? statusOption.color : '#e5e7eb';
+    if (!status) return theme.bgTertiary;
+    return statusBg[status] || theme.inputBg;
   };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1000px', margin: '0 auto' }}>
+    <div style={{ padding: '20px', maxWidth: '1000px', margin: '0 auto', color: theme.textPrimary }}>
       <h2>Employee Availability Manager</h2>
       <p>Set employee availability by day of the week with time constraints.</p>
 
       {/* Employee Selection */}
       <div style={{ marginBottom: '30px' }}>
-        <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
-          Select Employee:
+        <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold', color: theme.labelColor }}>
+          {canManageEmployees() ? 'Select Employee:' : 'Your Availability:'}
         </label>
-        <select
-          value={selectedEmployee}
-          onChange={(e) => setSelectedEmployee(e.target.value)}
-          style={{
+        {canManageEmployees() ? (
+          <select
+            value={selectedEmployee}
+            onChange={(e) => setSelectedEmployee(e.target.value)}
+            style={{
+              width: '300px',
+              padding: '10px',
+              fontSize: '16px',
+              border: `1px solid ${theme.inputBorder}`,
+              borderRadius: '5px',
+              backgroundColor: theme.inputBg,
+              color: theme.textPrimary
+            }}
+          >
+            <option value="">Choose an employee...</option>
+            {employees.map(employee => (
+              <option key={employee.id} value={employee.id}>
+                {employee.display_name || employee.full_name} ({employee.position})
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div style={{
             width: '300px',
             padding: '10px',
             fontSize: '16px',
-            border: '1px solid #d1d5db',
-            borderRadius: '5px'
-          }}
-        >
-          <option value="">Choose an employee...</option>
-          {employees.map(employee => (
-            <option key={employee.id} value={employee.id}>
-              {employee.display_name || employee.full_name} ({employee.position})
-            </option>
-          ))}
-        </select>
+            border: `1px solid ${theme.borderLight}`,
+            borderRadius: '5px',
+            backgroundColor: theme.inputDisabledBg,
+            color: theme.textPrimary
+          }}>
+            {employees.find(emp => emp.id === selectedEmployee)?.full_name || 'Not linked to an employee'}
+          </div>
+        )}
+        {!canManageEmployees() && !selectedEmployee && (
+          <p style={{ color: theme.textSecondary, fontSize: '14px', marginTop: '8px' }}>
+            Your account is not linked to an employee. Please contact an administrator.
+          </p>
+        )}
       </div>
 
       {selectedEmployee && (
         <div>
+          {/* Hours Preferences Section */}
+          <div style={{
+            marginBottom: '30px',
+            padding: '20px',
+            border: `2px solid ${theme.border}`,
+            borderRadius: '8px',
+            backgroundColor: theme.cardBg
+          }}>
+            <h3 style={{ marginTop: 0, color: theme.textPrimary }}>Weekly Hours Preferences</h3>
+            <p style={{ fontSize: '14px', color: theme.textSecondary, marginBottom: '15px' }}>
+              Set your preferred working hours per week. This helps managers create schedules that match your availability.
+            </p>
+            
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+              gap: '15px' 
+            }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: theme.labelColor }}>
+                  Minimum Hours/Week:
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="80"
+                  value={hoursPreferences.minimum_hours_per_week}
+                  onChange={(e) => setHoursPreferences(prev => ({
+                    ...prev,
+                    minimum_hours_per_week: e.target.value
+                  }))}
+                  placeholder="e.g., 15"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    fontSize: '16px',
+                    border: `1px solid ${theme.inputBorder}`,
+                    borderRadius: '5px',
+                    boxSizing: 'border-box',
+                    backgroundColor: theme.inputBg,
+                    color: theme.textPrimary
+                  }}
+                />
+                <p style={{ fontSize: '12px', color: theme.textSecondary, marginTop: '5px', marginBottom: 0 }}>
+                  Minimum hours you prefer
+                </p>
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: theme.labelColor }}>
+                  Ideal Hours/Week:
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="80"
+                  value={hoursPreferences.preferred_hours_per_week}
+                  onChange={(e) => setHoursPreferences(prev => ({
+                    ...prev,
+                    preferred_hours_per_week: e.target.value
+                  }))}
+                  placeholder="e.g., 30"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    fontSize: '16px',
+                    border: `1px solid ${theme.inputBorder}`,
+                    borderRadius: '5px',
+                    boxSizing: 'border-box',
+                    backgroundColor: theme.inputBg,
+                    color: theme.textPrimary
+                  }}
+                />
+                <p style={{ fontSize: '12px', color: theme.textSecondary, marginTop: '5px', marginBottom: 0 }}>
+                  Your ideal hours
+                </p>
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: theme.labelColor }}>
+                  Maximum Hours/Week:
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="80"
+                  value={hoursPreferences.maximum_hours_per_week}
+                  onChange={(e) => setHoursPreferences(prev => ({
+                    ...prev,
+                    maximum_hours_per_week: e.target.value
+                  }))}
+                  placeholder="e.g., 40"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    fontSize: '16px',
+                    border: `1px solid ${theme.inputBorder}`,
+                    borderRadius: '5px',
+                    boxSizing: 'border-box',
+                    backgroundColor: theme.inputBg,
+                    color: theme.textPrimary
+                  }}
+                />
+                <p style={{ fontSize: '12px', color: theme.textSecondary, marginTop: '5px', marginBottom: 0 }}>
+                  Maximum hours you prefer
+                </p>
+              </div>
+            </div>
+          </div>
+          
           <h3>Weekly Availability</h3>
           <div style={{ display: 'grid', gap: '20px', marginBottom: '30px' }}>
             {daysOfWeek.map(day => {
@@ -174,16 +360,16 @@ export default function AvailabilityManager() {
                 <div
                   key={day.id}
                   style={{
-                    border: '1px solid #d1d5db',
+                    border: `1px solid ${theme.border}`,
                     borderRadius: '8px',
                     padding: '15px',
-                    backgroundColor: '#f9fafb'
+                    backgroundColor: theme.cardBg
                   }}
                 >
                   <h4 style={{ 
                     margin: '0 0 15px 0',
-                    color: '#374151',
-                    borderBottom: '2px solid #e5e7eb',
+                    color: theme.textPrimary,
+                    borderBottom: `2px solid ${theme.borderLight}`,
                     paddingBottom: '5px'
                   }}>
                     {day.name}
@@ -191,7 +377,7 @@ export default function AvailabilityManager() {
                   
                   {/* Status Selection */}
                   <div style={{ marginBottom: '15px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: theme.labelColor }}>
                       Availability Status:
                     </label>
                     <select
@@ -201,9 +387,10 @@ export default function AvailabilityManager() {
                         width: '100%',
                         padding: '8px',
                         fontSize: '14px',
-                        border: '1px solid #d1d5db',
+                        border: `1px solid ${theme.inputBorder}`,
                         borderRadius: '4px',
-                        backgroundColor: getStatusColor(dayAvailability.status)
+                        backgroundColor: getStatusColor(dayAvailability.status),
+                        color: theme.textPrimary
                       }}
                     >
                       <option value="">Select status...</option>
@@ -219,7 +406,7 @@ export default function AvailabilityManager() {
                   {(dayAvailability.status === 'green' || dayAvailability.status === 'yellow') && (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
                       <div>
-                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
+                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: theme.labelColor }}>
                           Earliest Start Time:
                         </label>
                         <input
@@ -230,13 +417,15 @@ export default function AvailabilityManager() {
                             width: '100%',
                             padding: '6px',
                             fontSize: '14px',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '4px'
+                            border: `1px solid ${theme.inputBorder}`,
+                            borderRadius: '4px',
+                            backgroundColor: theme.inputBg,
+                            color: theme.textPrimary
                           }}
                         />
                       </div>
                       <div>
-                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
+                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: theme.labelColor }}>
                           Latest End Time:
                         </label>
                         <input
@@ -247,8 +436,10 @@ export default function AvailabilityManager() {
                             width: '100%',
                             padding: '6px',
                             fontSize: '14px',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '4px'
+                            border: `1px solid ${theme.inputBorder}`,
+                            borderRadius: '4px',
+                            backgroundColor: theme.inputBg,
+                            color: theme.textPrimary
                           }}
                         />
                       </div>
@@ -257,7 +448,7 @@ export default function AvailabilityManager() {
 
                   {/* Notes */}
                   <div>
-                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
+                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: theme.labelColor }}>
                       Notes (optional):
                     </label>
                     <textarea
@@ -269,9 +460,11 @@ export default function AvailabilityManager() {
                         minHeight: '60px',
                         padding: '6px',
                         fontSize: '14px',
-                        border: '1px solid #d1d5db',
+                        border: `1px solid ${theme.inputBorder}`,
                         borderRadius: '4px',
-                        resize: 'vertical'
+                        resize: 'vertical',
+                        backgroundColor: theme.inputBg,
+                        color: theme.textPrimary
                       }}
                     />
                   </div>
@@ -286,8 +479,8 @@ export default function AvailabilityManager() {
               onClick={saveAvailability}
               disabled={loading}
               style={{
-                backgroundColor: loading ? '#9ca3af' : '#3b82f6',
-                color: 'white',
+                backgroundColor: loading ? theme.buttonDisabled : theme.primary,
+                color: theme.primaryText,
                 padding: '12px 24px',
                 fontSize: '16px',
                 border: 'none',
@@ -307,9 +500,9 @@ export default function AvailabilityManager() {
               padding: '10px',
               borderRadius: '4px',
               textAlign: 'center',
-              backgroundColor: saveMessage.includes('Error') ? '#fef2f2' : '#f0fdf4',
-              color: saveMessage.includes('Error') ? '#dc2626' : '#16a34a',
-              border: `1px solid ${saveMessage.includes('Error') ? '#fecaca' : '#bbf7d0'}`
+              backgroundColor: saveMessage.includes('Error') ? theme.dangerBg : theme.successBg,
+              color: saveMessage.includes('Error') ? theme.dangerText : theme.successText,
+              border: `1px solid ${saveMessage.includes('Error') ? theme.dangerBorder : theme.successBorder}`
             }}>
               {saveMessage}
             </div>
@@ -318,7 +511,7 @@ export default function AvailabilityManager() {
       )}
 
       {/* Legend */}
-      <div style={{ marginTop: '40px', padding: '15px', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
+      <div style={{ marginTop: '40px', padding: '15px', backgroundColor: theme.bgTertiary, borderRadius: '8px' }}>
         <h4>Status Legend:</h4>
         <div style={{ display: 'grid', gap: '8px' }}>
           {statusOptions.map(option => (
@@ -333,7 +526,7 @@ export default function AvailabilityManager() {
             </div>
           ))}
         </div>
-        <p style={{ marginTop: '10px', fontSize: '14px', color: '#6b7280' }}>
+        <p style={{ marginTop: '10px', fontSize: '14px', color: theme.textSecondary }}>
           <strong>GREEN:</strong> Fully available with optional time constraints<br/>
           <strong>YELLOW:</strong> Limited availability (specify constraints in notes)<br/>
           <strong>RED:</strong> Not available for this day

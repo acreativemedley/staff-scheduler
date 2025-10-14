@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from './supabase'
+import PasswordReset from './PasswordReset'
 
 function Auth({ onAuth }) {
   const [loading, setLoading] = useState(false)
@@ -7,6 +8,7 @@ function Auth({ onAuth }) {
   const [password, setPassword] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
   const [message, setMessage] = useState('')
+  const [showPasswordReset, setShowPasswordReset] = useState(false)
 
   const handleAuth = async (e) => {
     e.preventDefault()
@@ -18,7 +20,7 @@ function Auth({ onAuth }) {
     try {
       let result
       if (isSignUp) {
-        // For sign up, disable email confirmation for testing
+        // For sign up, set redirect to current origin
         result = await supabase.auth.signUp({ 
           email, 
           password,
@@ -50,6 +52,11 @@ function Auth({ onAuth }) {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Show password reset component if requested
+  if (showPasswordReset) {
+    return <PasswordReset onBack={() => setShowPasswordReset(false)} />
   }
 
   return (
@@ -93,6 +100,25 @@ function Auth({ onAuth }) {
           {loading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
         </button>
       </form>
+      
+      {!isSignUp && (
+        <p style={{ textAlign: 'center', margin: '1rem 0' }}>
+          <button
+            type="button"
+            onClick={() => setShowPasswordReset(true)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#0066cc',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+              fontSize: '0.9rem'
+            }}
+          >
+            Forgot password?
+          </button>
+        </p>
+      )}
       
       <p style={{ textAlign: 'center', margin: '1rem 0' }}>
         {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}

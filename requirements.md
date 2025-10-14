@@ -75,7 +75,7 @@ A comprehensive web-based staff scheduling application for a small business with
 #### 5.1 Schedule Creation
 - **Must Have**: Generate weekly schedules based on template
 - **Must Have**: Consider staff availability (RED/YELLOW constraints)
-- **Must Have**: Account for approved time-off requests
+- **Must Have**: Account for time-off requests
 - **Must Have**: Manual override and adjustment capabilities
 - **Must Have**: Conflict detection and warnings
 

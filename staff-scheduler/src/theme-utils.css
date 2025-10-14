@@ -1,0 +1,135 @@
+/* Theme-aware utility classes for consistent styling across light and dark modes */
+
+/* Container/Card backgrounds */
+.theme-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+}
+
+.theme-bg-primary {
+  background-color: var(--bg-primary);
+}
+
+.theme-bg-secondary {
+  background-color: var(--bg-secondary);
+}
+
+.theme-bg-tertiary {
+  background-color: var(--bg-tertiary);
+}
+
+/* Text colors */
+.theme-text-primary {
+  color: var(--text-primary);
+}
+
+.theme-text-secondary {
+  color: var(--text-secondary);
+}
+
+/* Borders */
+.theme-border {
+  border-color: var(--border-color);
+}
+
+/* Inputs */
+.theme-input,
+input[type="text"].theme-input,
+input[type="email"].theme-input,
+input[type="number"].theme-input,
+input[type="date"].theme-input,
+input[type="time"].theme-input {
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--input-text);
+}
+
+.theme-input:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 0;
+}
+
+.theme-input:disabled {
+  background-color: var(--input-disabled-bg);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+
+/* Select elements */
+select.theme-select {
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--input-text);
+}
+
+/* Textareas */
+textarea.theme-textarea {
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--input-text);
+}
+
+/* Global input styling for dark mode compatibility */
+@media (prefers-color-scheme: dark) {
+  /* Make all inputs, selects, and textareas dark mode compatible */
+  input:not([type="submit"]):not([type="button"]):not([type="reset"]),
+  select,
+  textarea {
+    background-color: var(--input-bg);
+    border-color: var(--input-border);
+    color: var(--input-text);
+  }
+  
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--muted-text);
+  }
+  
+  /* Fix specific inline styles that break in dark mode */
+  div[style*="backgroundColor: '#f9fafb'"],
+  div[style*="backgroundColor: '#f3f4f6'"],
+  div[style*="backgroundColor: '#ffffff'"],
+  div[style*="background-color: #f9fafb"],
+  div[style*="background-color: #f3f4f6"],
+  div[style*="background-color: white"] {
+    background-color: var(--bg-secondary) !important;
+  }
+  
+  /* Fix text colors */
+  span[style*="color: #374151"],
+  div[style*="color: #374151"],
+  p[style*="color: #374151"],
+  label[style*="color: #374151"] {
+    color: var(--text-primary) !important;
+  }
+  
+  span[style*="color: #6b7280"],
+  div[style*="color: #6b7280"],
+  p[style*="color: #6b7280"],
+  label[style*="color: #6b7280"],
+  span[style*="color: #4b5563"],
+  div[style*="color: #4b5563"],
+  p[style*="color: #4b5563"],
+  label[style*="color: #4b5563"] {
+    color: var(--text-secondary) !important;
+  }
+  
+  span[style*="color: #9ca3af"],
+  div[style*="color: #9ca3af"],
+  p[style*="color: #9ca3af"] {
+    color: var(--muted-text) !important;
+  }
+  
+  /* Fix borders */
+  div[style*="border: 1px solid #d1d5db"],
+  div[style*="border: 1px solid #e5e7eb"],
+  input[style*="border: 1px solid #d1d5db"],
+  select[style*="border: 1px solid #d1d5db"] {
+    border-color: var(--border-color) !important;
+  }
+  
+  div[style*="borderBottom: '1px solid #e5e7eb'"],
+  div[style*="borderTop: '1px solid #e5e7eb'"] {
+    border-color: var(--border-secondary) !important;
+  }
+}
