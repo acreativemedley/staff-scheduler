@@ -1,9 +1,0 @@
-Tasks
-
-Shift validation - enough staff, time off, min/max hours
-Email schedule to staff
-Notify single user of update
-Add store events to weekly printable
-
-Intro email to staff
-
