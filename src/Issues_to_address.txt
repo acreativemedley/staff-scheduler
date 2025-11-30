@@ -1,6 +1,0 @@
-Issues to address after app is functional
-    Date validation in time off request - same as below
-    Time validation in time off request - if time is not valid, can we send an email to the employee notifying them and ask them to fix it? Or can I get a notification so I can manually fix it?
-    Validate email, so if there is a mismatch between name and email, it gets highlighted
-    put invalid requests (email name mismatch) into a different bucket to be handled manually? Or will being logged in address this?
-    Not sending email for short notice requests
