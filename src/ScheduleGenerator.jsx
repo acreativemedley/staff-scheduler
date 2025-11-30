@@ -4,6 +4,7 @@ import { parseDate, formatDateForInput, formatDateDisplay, getWeekDates, isDateI
 import { extractTimeOnly, normalizeTime } from './timeUtils';
 import { useUser } from './UserContext-Minimal';
 import { theme } from './theme';
+import MySchedulePrinter from './MySchedulePrinter';
 import './ScheduleGenerator.css';
 
 export default function ScheduleGenerator() {
@@ -24,6 +25,7 @@ export default function ScheduleGenerator() {
   const [currentMonth, setCurrentMonth] = useState('');
   const [calendarEvents, setCalendarEvents] = useState({});
   const [editingShiftId, setEditingShiftId] = useState(null); // Track which shift is being edited
+  const [showMySchedule, setShowMySchedule] = useState(false); // For My Schedule modal
 
   const GOOGLE_CALENDAR_ID = 'fc4e0d1faabf03c4e7f0934b1087b4b244bda5f8d76bc3ae7f278e02e21d82eb@group.calendar.google.com';
 
@@ -1344,10 +1346,12 @@ export default function ScheduleGenerator() {
       boxSizing: 'border-box'
     }}>
       <h2 style={{ color: theme.textPrimary }}>Schedule Manager</h2>
-      <p style={{ marginBottom: '20px', color: theme.textSecondary }}>
-        Load your predefined base schedule and edit as needed. Time-off conflicts are highlighted in red.
-        <strong> Set up your base schedule first using the "Base Schedule" tab.</strong>
-      </p>
+      {canEdit && (
+        <p style={{ marginBottom: '20px', color: theme.textSecondary }}>
+          Load your predefined base schedule and edit as needed. Time-off conflicts are highlighted in red.
+          <strong> Set up your base schedule first using the "Base Schedule" tab.</strong>
+        </p>
+      )}
 
       {/* View Mode Toggle */}
       <div style={{ 
@@ -1444,6 +1448,20 @@ export default function ScheduleGenerator() {
               }}
             >
               🖨️ Print Week
+            </button>
+            
+            <button
+              onClick={() => setShowMySchedule(true)}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: theme.primary,
+                color: theme.primaryText,
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              📋 My Schedule
             </button>
           </div>
           
@@ -1924,6 +1942,13 @@ export default function ScheduleGenerator() {
           </div>
         </div>
       )}
+
+      {/* My Schedule Modal */}
+      <MySchedulePrinter 
+        isOpen={showMySchedule} 
+        onClose={() => setShowMySchedule(false)} 
+        userProfile={userProfile}
+      />
     </div>
   );
 }

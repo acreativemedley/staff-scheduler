@@ -12,6 +12,7 @@ import BaseScheduleManager from './BaseScheduleManager'
 import ScheduleGenerator from './ScheduleGenerator'
 import UserManagement from './UserManagement'
 import DatabaseTest from './DatabaseTest'
+import UserSettings from './UserSettings'
 import { UserProvider, useUser } from './UserContext-Minimal'
 import './App.css'
 import './theme-utils.css'
@@ -89,17 +90,15 @@ function AppContent() {
         { key: 'schedule-templates', label: 'Schedule Templates', icon: '🗓️' },
         { key: 'base-schedule-manager', label: 'Base Schedule', icon: '📝' }
       )
-    } else {
-      // Staff can see team availability but read-only
-      baseTabs.unshift(
-        { key: 'availability-overview', label: 'Team Availability', icon: '📅' }
-      )
     }
 
     // Add admin-only tabs
     if (canManageUserAccounts()) {
       baseTabs.push({ key: 'user-management', label: 'User Management', icon: '👤' })
     }
+
+    // Add settings tab for all users
+    baseTabs.push({ key: 'account-settings', label: 'Account Settings', icon: '⚙️' })
 
     return baseTabs
   }
@@ -367,6 +366,8 @@ function AppContent() {
       {activeTab === 'schedule-generator' && <ScheduleGenerator />}
 
       {activeTab === 'user-management' && canManageUserAccounts() && <UserManagement />}
+
+      {activeTab === 'account-settings' && <UserSettings user={user} userProfile={userProfile} />}
     </div>
   )
 }
