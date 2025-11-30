@@ -408,7 +408,7 @@ export default function TimeOffRequest() {
         </div>
 
         {/* Date Range */}
-        <div style={{ display: 'grid', gridTemplateColumns: formData.is_recurring ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
+        <div className="grid-2-col" style={{ display: 'grid', gridTemplateColumns: formData.is_recurring ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
           <div>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
               {formData.is_recurring ? 'Pattern Start Date: *' : 'Start Date: *'}

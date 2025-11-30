@@ -4,6 +4,8 @@ import { parseDate, formatDateForInput, formatDateDisplay, getWeekDates, isDateI
 import { extractTimeOnly, normalizeTime } from './timeUtils';
 import { useUser } from './UserContext-Minimal';
 import { theme } from './theme';
+import MySchedulePrinter from './MySchedulePrinter';
+import './ScheduleGenerator.css';
 
 export default function ScheduleGenerator() {
   const { canEdit, userProfile } = useUser();
@@ -23,6 +25,7 @@ export default function ScheduleGenerator() {
   const [currentMonth, setCurrentMonth] = useState('');
   const [calendarEvents, setCalendarEvents] = useState({});
   const [editingShiftId, setEditingShiftId] = useState(null); // Track which shift is being edited
+  const [showMySchedule, setShowMySchedule] = useState(false); // For My Schedule modal
 
   const GOOGLE_CALENDAR_ID = 'fc4e0d1faabf03c4e7f0934b1087b4b244bda5f8d76bc3ae7f278e02e21d82eb@group.calendar.google.com';
 
@@ -1343,10 +1346,12 @@ export default function ScheduleGenerator() {
       boxSizing: 'border-box'
     }}>
       <h2 style={{ color: theme.textPrimary }}>Schedule Manager</h2>
-      <p style={{ marginBottom: '20px', color: theme.textSecondary }}>
-        Load your predefined base schedule and edit as needed. Time-off conflicts are highlighted in red.
-        <strong> Set up your base schedule first using the "Base Schedule" tab.</strong>
-      </p>
+      {canEdit && (
+        <p style={{ marginBottom: '20px', color: theme.textSecondary }}>
+          Load your predefined base schedule and edit as needed. Time-off conflicts are highlighted in red.
+          <strong> Set up your base schedule first using the "Base Schedule" tab.</strong>
+        </p>
+      )}
 
       {/* View Mode Toggle */}
       <div style={{ 
@@ -1387,10 +1392,7 @@ export default function ScheduleGenerator() {
 
       {/* Navigation and Print Controls */}
       {viewMode === 'week' ? (
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
+        <div className="schedule-nav-controls" style={{ 
           marginBottom: '20px',
           padding: '15px',
           backgroundColor: theme.cardBg,
@@ -1410,7 +1412,7 @@ export default function ScheduleGenerator() {
             ← Previous Week
           </button>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <div className="schedule-nav-center">
             <div style={{ textAlign: 'center' }}>
               <h3 style={{ margin: '0 0 5px 0', color: theme.textPrimary }}>
                 Week of {formatDateHeader(getWeekDates(new Date(currentWeek + 'T00:00:00'))[0])} - {formatDateHeader(getWeekDates(new Date(currentWeek + 'T00:00:00'))[6])}
@@ -1446,6 +1448,20 @@ export default function ScheduleGenerator() {
               }}
             >
               🖨️ Print Week
+            </button>
+            
+            <button
+              onClick={() => setShowMySchedule(true)}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: theme.primary,
+                color: theme.primaryText,
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              📋 My Schedule
             </button>
           </div>
           
@@ -1593,14 +1609,8 @@ export default function ScheduleGenerator() {
           width: '100%',
           overflowX: 'auto',
           WebkitOverflowScrolling: 'touch'
-        }}>
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(7, minmax(150px, 1fr))',
-            width: '100%',
-            minWidth: '1050px',
-            minHeight: '400px'
-          }}>
+        }} className="schedule-container">
+          <div className="schedule-week-grid">
             {getWeekDates(new Date(currentWeek + 'T00:00:00')).map((date, index) => {
               const dateKey = formatDateForInput(date);
               const daySchedule = weeklySchedule[dateKey];
@@ -1608,15 +1618,10 @@ export default function ScheduleGenerator() {
               return (
                 <div
                   key={dateKey}
-                  style={{
-                    border: index < 6 ? '0 1px 0 0' : '0',
-                    borderStyle: 'solid',
-                    borderColor: theme.border,
-                    minHeight: '400px'
-                  }}
+                  className="schedule-day-column"
                 >
                   {/* Day Header */}
-                  <div style={{
+                  <div className="schedule-day-header" style={{
                     padding: '12px 8px',
                     backgroundColor: theme.bgSecondary,
                     borderBottom: `1px solid ${theme.border}`,
@@ -1937,6 +1942,13 @@ export default function ScheduleGenerator() {
           </div>
         </div>
       )}
+
+      {/* My Schedule Modal */}
+      <MySchedulePrinter 
+        isOpen={showMySchedule} 
+        onClose={() => setShowMySchedule(false)} 
+        userProfile={userProfile}
+      />
     </div>
   );
 }

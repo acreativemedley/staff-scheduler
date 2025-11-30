@@ -1,0 +1,112 @@
+/* Schedule Generator Mobile Responsiveness */
+
+.schedule-week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(150px, 1fr));
+  width: 100%;
+  min-width: 1050px;
+  min-height: 400px;
+}
+
+.schedule-day-column {
+  border-right: 1px solid var(--border-color);
+  min-height: 400px;
+}
+
+.schedule-day-column:last-child {
+  border-right: none;
+}
+
+/* Navigation controls */
+.schedule-nav-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.schedule-nav-center {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+/* Mobile view - stack days vertically */
+@media (max-width: 768px) {
+  .schedule-container {
+    overflow-x: visible !important;
+  }
+  
+  .schedule-week-grid {
+    display: block !important;
+    min-width: 100% !important;
+    width: 100% !important;
+  }
+  
+  .schedule-day-column {
+    border-right: none !important;
+    border-bottom: 2px solid var(--border-color);
+    min-height: auto !important;
+    margin-bottom: 1rem;
+  }
+  
+  .schedule-day-column:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+  }
+  
+  /* Make day headers sticky on mobile */
+  .schedule-day-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  
+  /* Adjust shift cards for mobile */
+  .shift-card {
+    margin-bottom: 0.5rem;
+  }
+  
+  /* Stack navigation controls on mobile */
+  .schedule-nav-controls {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .schedule-nav-center {
+    flex-direction: column;
+    width: 100%;
+    text-align: center;
+  }
+  
+  /* Make navigation buttons full-width on mobile */
+  .schedule-nav-controls button {
+    width: 100%;
+    min-width: 100%;
+  }
+  
+  /* Week title responsive */
+  .schedule-nav-controls h3 {
+    font-size: 1rem !important;
+    line-height: 1.3 !important;
+  }
+}
+
+/* Tablet view - show 2 columns */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .schedule-week-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    min-width: 100% !important;
+  }
+  
+  .schedule-day-column {
+    min-height: 300px;
+  }
+  
+  /* Adjust navigation for tablet */
+  .schedule-nav-center {
+    flex-direction: column;
+  }
+}

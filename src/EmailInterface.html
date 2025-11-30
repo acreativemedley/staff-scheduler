@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Communications</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+    
+    .header p {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    
+    .tabs {
+      display: flex;
+      background: #f5f5f5;
+      border-bottom: 2px solid #ddd;
+    }
+    
+    .tab {
+      flex: 1;
+      padding: 15px;
+      text-align: center;
+      cursor: pointer;
+      background: #f5f5f5;
+      border: none;
+      font-size: 16px;
+      transition: all 0.3s;
+    }
+    
+    .tab:hover {
+      background: #e0e0e0;
+    }
+    
+    .tab.active {
+      background: white;
+      border-bottom: 3px solid #667eea;
+      font-weight: bold;
+      color: #667eea;
+    }
+    
+    .tab-content {
+      display: none;
+      padding: 30px;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-group label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #333;
+    }
+    
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+    
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    .form-group textarea {
+      min-height: 150px;
+      resize: vertical;
+      font-family: inherit;
+    }
+    
+    .btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 12px 30px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn:active {
+      transform: translateY(0);
+    }
+    
+    .btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .message {
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    
+    .message.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    
+    .message.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    
+    .message.info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+    
+    .group-selector {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    
+    .group-selector select {
+      flex: 1;
+    }
+    
+    .info-box {
+      background: #f0f7ff;
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    
+    .info-box p {
+      margin: 5px 0;
+      font-size: 14px;
+      color: #555;
+    }
+    
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 20px;
+    }
+    
+    .loading.active {
+      display: block;
+    }
+    
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    @media (max-width: 768px) {
+      .container {
+        margin: 0;
+        border-radius: 0;
+      }
+      
+      .header h1 {
+        font-size: 22px;
+      }
+      
+      .tabs {
+        flex-wrap: wrap;
+      }
+      
+      .tab {
+        font-size: 14px;
+        padding: 12px 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📧 Email Communications</h1>
+      <p>Send and manage email notifications for staff</p>
+    </div>
+    
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('contact-manager')">Contact Manager</button>
+      <button class="tab" onclick="showTab('send-individual')">Send to Individual</button>
+      <button class="tab" onclick="showTab('send-all')">Send to All</button>
+      <button class="tab" onclick="showTab('send-group')">Send to Group</button>
+    </div>
+    
+    <!-- Contact Manager Tab -->
+    <div id="contact-manager" class="tab-content active">
+      <div class="info-box">
+        <p><strong>📬 Contact Your Manager</strong></p>
+        <p>Use this form to send a message directly to your manager.</p>
+      </div>
+      
+      <div id="message-contact-manager" class="message"></div>
+      
+      <form id="form-contact-manager">
+        <div class="form-group">
+          <label for="contact-subject">Subject *</label>
+          <input type="text" id="contact-subject" name="subject" required placeholder="e.g., Schedule question">
+        </div>
+        
+        <div class="form-group">
+          <label for="contact-message">Message *</label>
+          <textarea id="contact-message" name="message" required placeholder="Type your message here..."></textarea>
+        </div>
+        
+        <button type="submit" class="btn">Send Message to Manager</button>
+      </form>
+    </div>
+    
+    <!-- Send to Individual Tab -->
+    <div id="send-individual" class="tab-content">
+      <div class="info-box">
+        <p><strong>👤 Send to Individual Staff Member</strong></p>
+        <p>Send an email to a specific staff member.</p>
+      </div>
+      
+      <div id="message-individual" class="message"></div>
+      
+      <form id="form-individual">
+        <div class="form-group">
+          <label for="individual-email">Recipient Email *</label>
+          <input type="email" id="individual-email" name="email" required placeholder="staff@example.com">
+        </div>
+        
+        <div class="form-group">
+          <label for="individual-subject">Subject *</label>
+          <input type="text" id="individual-subject" name="subject" required placeholder="e.g., Schedule Update">
+        </div>
+        
+        <div class="form-group">
+          <label for="individual-message">Message *</label>
+          <textarea id="individual-message" name="message" required placeholder="Type your message here..."></textarea>
+        </div>
+        
+        <button type="submit" class="btn">Send Email</button>
+      </form>
+    </div>
+    
+    <!-- Send to All Tab -->
+    <div id="send-all" class="tab-content">
+      <div class="info-box">
+        <p><strong>👥 Send to All Staff</strong></p>
+        <p>Send an email to all active staff members at once.</p>
+      </div>
+      
+      <div id="message-all" class="message"></div>
+      
+      <form id="form-all">
+        <div class="form-group">
+          <label for="all-subject">Subject *</label>
+          <input type="text" id="all-subject" name="subject" required placeholder="e.g., Weekly Schedule Posted">
+        </div>
+        
+        <div class="form-group">
+          <label for="all-message">Message *</label>
+          <textarea id="all-message" name="message" required placeholder="Type your message here..."></textarea>
+        </div>
+        
+        <button type="submit" class="btn">Send to All Staff</button>
+      </form>
+    </div>
+    
+    <!-- Send to Group Tab -->
+    <div id="send-group" class="tab-content">
+      <div class="info-box">
+        <p><strong>👨‍👩‍👧‍👦 Send to Group</strong></p>
+        <p>Send an email to a specific group (by position or role).</p>
+      </div>
+      
+      <div id="message-group" class="message"></div>
+      
+      <form id="form-group">
+        <div class="form-group">
+          <label>Select Group Type and Value *</label>
+          <div class="group-selector">
+            <select id="group-type" name="groupType" required onchange="loadGroupValues()">
+              <option value="">-- Select Type --</option>
+              <option value="position">By Position</option>
+              <option value="role">By Role</option>
+            </select>
+            
+            <select id="group-value" name="groupValue" required disabled>
+              <option value="">-- Select Value --</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="group-subject">Subject *</label>
+          <input type="text" id="group-subject" name="subject" required placeholder="e.g., Team Meeting">
+        </div>
+        
+        <div class="form-group">
+          <label for="group-message">Message *</label>
+          <textarea id="group-message" name="message" required placeholder="Type your message here..."></textarea>
+        </div>
+        
+        <button type="submit" class="btn">Send to Group</button>
+      </form>
+    </div>
+    
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p style="margin-top: 10px;">Sending email...</p>
+    </div>
+  </div>
+
+  <script>
+    // Tab switching
+    function showTab(tabId) {
+      // Hide all tabs
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      
+      // Show selected tab
+      document.getElementById(tabId).classList.add('active');
+      event.target.classList.add('active');
+      
+      // Clear messages
+      clearMessages();
+    }
+    
+    function showMessage(containerId, message, type) {
+      const messageDiv = document.getElementById(containerId);
+      messageDiv.textContent = message;
+      messageDiv.className = `message ${type}`;
+      messageDiv.style.display = 'block';
+      
+      // Auto-hide after 5 seconds for success messages
+      if (type === 'success') {
+        setTimeout(() => {
+          messageDiv.style.display = 'none';
+        }, 5000);
+      }
+    }
+    
+    function clearMessages() {
+      document.querySelectorAll('.message').forEach(msg => {
+        msg.style.display = 'none';
+      });
+    }
+    
+    function showLoading(show) {
+      document.getElementById('loading').classList.toggle('active', show);
+      
+      // Disable all submit buttons while loading
+      document.querySelectorAll('.btn').forEach(btn => {
+        btn.disabled = show;
+      });
+    }
+    
+    // Contact Manager Form
+    document.getElementById('form-contact-manager').addEventListener('submit', function(e) {
+      e.preventDefault();
+      clearMessages();
+      showLoading(true);
+      
+      const subject = document.getElementById('contact-subject').value;
+      const message = document.getElementById('contact-message').value;
+      
+      google.script.run
+        .withSuccessHandler(function(response) {
+          showLoading(false);
+          if (response.success) {
+            showMessage('message-contact-manager', response.message, 'success');
+            document.getElementById('form-contact-manager').reset();
+          } else {
+            showMessage('message-contact-manager', response.error || 'Failed to send message', 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showLoading(false);
+          showMessage('message-contact-manager', 'Error: ' + error.message, 'error');
+        })
+        .sendEmailToManager(subject, message);
+    });
+    
+    // Individual Email Form
+    document.getElementById('form-individual').addEventListener('submit', function(e) {
+      e.preventDefault();
+      clearMessages();
+      showLoading(true);
+      
+      const email = document.getElementById('individual-email').value;
+      const subject = document.getElementById('individual-subject').value;
+      const message = document.getElementById('individual-message').value;
+      
+      google.script.run
+        .withSuccessHandler(function(response) {
+          showLoading(false);
+          if (response.success) {
+            showMessage('message-individual', response.message, 'success');
+            document.getElementById('form-individual').reset();
+          } else {
+            showMessage('message-individual', response.error || 'Failed to send email', 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showLoading(false);
+          showMessage('message-individual', 'Error: ' + error.message, 'error');
+        })
+        .sendEmailToUser(email, subject, message);
+    });
+    
+    // Send to All Form
+    document.getElementById('form-all').addEventListener('submit', function(e) {
+      e.preventDefault();
+      clearMessages();
+      
+      if (!confirm('Are you sure you want to send this email to ALL staff members?')) {
+        return;
+      }
+      
+      showLoading(true);
+      
+      const subject = document.getElementById('all-subject').value;
+      const message = document.getElementById('all-message').value;
+      
+      google.script.run
+        .withSuccessHandler(function(response) {
+          showLoading(false);
+          if (response.success) {
+            let msg = response.message;
+            if (response.details && response.details.failed > 0) {
+              msg += `\n\nFailed to send to: ${response.details.failedEmails.join(', ')}`;
+            }
+            showMessage('message-all', msg, 'success');
+            document.getElementById('form-all').reset();
+          } else {
+            showMessage('message-all', response.error || 'Failed to send emails', 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showLoading(false);
+          showMessage('message-all', 'Error: ' + error.message, 'error');
+        })
+        .sendEmailToAllUsers(subject, message);
+    });
+    
+    // Send to Group Form
+    document.getElementById('form-group').addEventListener('submit', function(e) {
+      e.preventDefault();
+      clearMessages();
+      
+      const groupType = document.getElementById('group-type').value;
+      const groupValue = document.getElementById('group-value').value;
+      const subject = document.getElementById('group-subject').value;
+      const message = document.getElementById('group-message').value;
+      
+      if (!confirm(`Are you sure you want to send this email to all staff in ${groupType}: ${groupValue}?`)) {
+        return;
+      }
+      
+      showLoading(true);
+      
+      google.script.run
+        .withSuccessHandler(function(response) {
+          showLoading(false);
+          if (response.success) {
+            let msg = response.message;
+            if (response.details && response.details.failed > 0) {
+              msg += `\n\nFailed to send to: ${response.details.failedEmails.join(', ')}`;
+            }
+            showMessage('message-group', msg, 'success');
+            document.getElementById('form-group').reset();
+            document.getElementById('group-value').disabled = true;
+          } else {
+            showMessage('message-group', response.error || 'Failed to send emails', 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showLoading(false);
+          showMessage('message-group', 'Error: ' + error.message, 'error');
+        })
+        .sendEmailToGroup(groupType, groupValue, subject, message);
+    });
+    
+    // Load group values based on selected type
+    function loadGroupValues() {
+      const groupType = document.getElementById('group-type').value;
+      const groupValueSelect = document.getElementById('group-value');
+      
+      if (!groupType) {
+        groupValueSelect.disabled = true;
+        groupValueSelect.innerHTML = '<option value="">-- Select Value --</option>';
+        return;
+      }
+      
+      groupValueSelect.disabled = true;
+      groupValueSelect.innerHTML = '<option value="">Loading...</option>';
+      
+      const functionName = groupType === 'position' ? 'getAvailablePositions' : 'getAvailableRoles';
+      
+      google.script.run
+        .withSuccessHandler(function(values) {
+          groupValueSelect.innerHTML = '<option value="">-- Select Value --</option>';
+          
+          if (values && values.length > 0) {
+            values.forEach(value => {
+              const option = document.createElement('option');
+              option.value = value;
+              option.textContent = value;
+              groupValueSelect.appendChild(option);
+            });
+            groupValueSelect.disabled = false;
+          } else {
+            groupValueSelect.innerHTML = '<option value="">No values found</option>';
+          }
+        })
+        .withFailureHandler(function(error) {
+          groupValueSelect.innerHTML = '<option value="">Error loading values</option>';
+          console.error('Error loading group values:', error);
+        })
+        [functionName]();
+    }
+  </script>
+</body>
+</html>

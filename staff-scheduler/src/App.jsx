@@ -12,21 +12,19 @@ import BaseScheduleManager from './BaseScheduleManager'
 import ScheduleGenerator from './ScheduleGenerator'
 import UserManagement from './UserManagement'
 import DatabaseTest from './DatabaseTest'
-import UpdatePassword from './UpdatePassword'
+import UserSettings from './UserSettings'
 import { UserProvider, useUser } from './UserContext-Minimal'
 import './App.css'
 import './theme-utils.css'
+import './mobile-responsive.css'
 
 function AppContent() {
   const { user, userProfile, loading: userLoading, canManageEmployees, canManageUserAccounts } = useUser()
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [refreshEmployees, setRefreshEmployees] = useState(0)
-  const [activeTab, setActiveTab] = useState('availability-overview')
-
-  // Check if we're on the password update route
-  const isPasswordUpdateRoute = window.location.pathname === '/update-password' || 
-                                 window.location.hash === '#/update-password'
+  const [activeTab, setActiveTab] = useState('schedule-generator') // Default to View Schedules
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     // Wait for user context to load
@@ -34,11 +32,6 @@ function AppContent() {
       setLoading(false)
     }
   }, [userLoading])
-
-  // If we're on the password update route, show that component regardless of auth status
-  if (isPasswordUpdateRoute) {
-    return <UpdatePassword />
-  }
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -97,17 +90,15 @@ function AppContent() {
         { key: 'schedule-templates', label: 'Schedule Templates', icon: '🗓️' },
         { key: 'base-schedule-manager', label: 'Base Schedule', icon: '📝' }
       )
-    } else {
-      // Staff can see team availability but read-only
-      baseTabs.unshift(
-        { key: 'availability-overview', label: 'Team Availability', icon: '📅' }
-      )
     }
 
     // Add admin-only tabs
     if (canManageUserAccounts()) {
       baseTabs.push({ key: 'user-management', label: 'User Management', icon: '👤' })
     }
+
+    // Add settings tab for all users
+    baseTabs.push({ key: 'account-settings', label: 'Account Settings', icon: '⚙️' })
 
     return baseTabs
   }
@@ -169,7 +160,29 @@ function AppContent() {
       </div>
 
       {/* Navigation Tabs */}
-      <div style={{ 
+      {/* Mobile Hamburger Button */}
+      <button
+        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        className="mobile-menu-toggle"
+        style={{
+          padding: '0.75rem',
+          backgroundColor: '#3b82f6',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '1.5rem',
+          marginBottom: '1rem',
+          alignItems: 'center',
+          gap: '0.5rem'
+        }}
+      >
+        <span>{mobileMenuOpen ? '✕' : '☰'}</span>
+        <span style={{ fontSize: '1rem' }}>Menu</span>
+      </button>
+
+      {/* Desktop Navigation */}
+      <div className="desktop-nav" style={{ 
         borderBottom: '2px solid var(--border-color)',
         marginBottom: '1.5rem',
         overflowX: 'auto',
@@ -204,6 +217,111 @@ function AppContent() {
           ))}
         </div>
       </div>
+
+      {/* Mobile Navigation Menu */}
+      {mobileMenuOpen && (
+        <>
+          {/* Overlay */}
+          <div
+            className="mobile-menu-overlay"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              zIndex: 999
+            }}
+          />
+          
+          {/* Sliding Menu */}
+          <div
+            className="mobile-menu"
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              bottom: 0,
+              width: '280px',
+              backgroundColor: 'var(--bg-primary)',
+              boxShadow: '2px 0 8px rgba(0, 0, 0, 0.2)',
+              zIndex: 1000,
+              overflowY: 'auto',
+              padding: '1rem',
+              animation: 'slideIn 0.3s ease-out'
+            }}
+          >
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              marginBottom: '1.5rem',
+              paddingBottom: '1rem',
+              borderBottom: '2px solid var(--border-color)'
+            }}>
+              <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Menu</h2>
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  padding: '0.25rem',
+                  color: 'var(--text-primary)'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            
+            <nav>
+              {getNavigationTabs().map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => {
+                    setActiveTab(tab.key);
+                    if (tab.key !== 'employees') setShowAddForm(false);
+                    setMobileMenuOpen(false);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '1rem',
+                    backgroundColor: activeTab === tab.key ? '#3b82f6' : 'transparent',
+                    color: activeTab === tab.key ? 'white' : 'var(--text-primary)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '1rem',
+                    fontWeight: activeTab === tab.key ? 'bold' : 'normal',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '1rem',
+                    marginBottom: '0.5rem',
+                    textAlign: 'left',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeTab !== tab.key) {
+                      e.target.style.backgroundColor = 'var(--bg-secondary, #f3f4f6)'
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeTab !== tab.key) {
+                      e.target.style.backgroundColor = 'transparent'
+                    }
+                  }}
+                >
+                  <span style={{ fontSize: '1.5rem' }}>{tab.icon}</span>
+                  <span>{tab.label}</span>
+                </button>
+              ))}
+            </nav>
+          </div>
+        </>
+      )}
 
       {/* Tab Content */}
       {activeTab === 'employees' && (
@@ -248,6 +366,8 @@ function AppContent() {
       {activeTab === 'schedule-generator' && <ScheduleGenerator />}
 
       {activeTab === 'user-management' && canManageUserAccounts() && <UserManagement />}
+
+      {activeTab === 'account-settings' && <UserSettings user={user} userProfile={userProfile} />}
     </div>
   )
 }

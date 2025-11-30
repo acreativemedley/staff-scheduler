@@ -6,23 +6,50 @@
 }
 
 /* Mobile responsive adjustments */
+
+/* Hide mobile menu elements by default (desktop view) */
+.mobile-menu-toggle {
+  display: none;
+}
+
 @media (max-width: 768px) {
   #root {
     padding: 0.5rem;
   }
   
-  .tab-label {
+  /* Hide desktop navigation on mobile */
+  .desktop-nav {
     display: none !important;
   }
   
-  .tab-icon {
+  /* Show mobile menu toggle on mobile */
+  .mobile-menu-toggle {
+    display: flex !important;
+  }
+}
+
+/* Desktop view - ensure desktop nav is visible */
+@media (min-width: 769px) {
+  .mobile-menu-toggle {
+    display: none !important;
+  }
+  
+  .desktop-nav {
+    display: block !important;
+  }
+  
+  .tab-label {
     display: inline !important;
   }
 }
 
-@media (min-width: 769px) {
-  .tab-label {
-    display: inline !important;
+/* Slide-in animation for mobile menu */
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
   }
 }
 

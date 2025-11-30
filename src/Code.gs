@@ -19,6 +19,12 @@ function doGet(e) {
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
   
+  if (page === 'email') {
+    return HtmlService.createHtmlOutputFromFile('EmailInterface')
+      .setTitle('Email Communications - Staff Scheduling')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+  
   // Default to staff directory
   return HtmlService.createHtmlOutputFromFile('StaffDirectory')
     .setTitle('Staff Directory - Madison Scheduling')
